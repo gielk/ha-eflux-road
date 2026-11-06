@@ -21,7 +21,7 @@ class EFluxStartButton(CoordinatorEntity, ButtonEntity):
 
     _attr_has_entity_name = True
     _attr_name = "Start laadsessie"
-    _attr_icon = "mdi:ev-station"
+    _attr_icon = "mdi:play-circle-outline"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator)

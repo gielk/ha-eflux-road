@@ -1,4 +1,13 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="custom_components/eflux_road/brand/dark_logo.png">
+    <img alt="E-Flux by Road" src="custom_components/eflux_road/brand/logo.png" width="300">
+  </picture>
+</p>
+
 # E-Flux by Road voor Home Assistant
+
+Een community-integratie; geen officiële integratie van E-Flux by Road.
 
 Start en volg je E-Flux (Road.io) laadsessies rechtstreeks vanuit Home Assistant. Ideaal voor het automatisch starten van laadsessies wanneer je je auto (zoals een Tesla) inplugt.
 

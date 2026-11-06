@@ -1,0 +1,10 @@
+{
+  "services": {
+    "start_session": {
+      "service": "mdi:play-circle-outline"
+    },
+    "stop_session": {
+      "service": "mdi:stop-circle-outline"
+    }
+  }
+}
