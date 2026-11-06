@@ -1,0 +1,68 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "E-Flux by Road koppelen",
+        "menu_options": {
+          "login": "Inloggen met E-Flux",
+          "session": "Bestaande E-Flux-sessie gebruiken"
+        }
+      },
+      "login": {
+        "title": "Inloggen met E-Flux",
+        "description": "Log in met je E-Flux-account.",
+        "data": {
+          "username": "E-mailadres",
+          "password": "Wachtwoord"
+        }
+      },
+      "session": {
+        "title": "E-Flux-sessie koppelen",
+        "description": "Gebruik een bestaande sessie wanneer E-Flux om extra verificatie vraagt.",
+        "data": {
+          "session_token": "E-Flux-sessie"
+        }
+      },
+      "charger": {
+        "title": "Laadpaal en laadpas",
+        "data": {
+          "evse_id": "Laadpunt-ID",
+          "location_id": "Locatie-ID",
+          "evse_uid": "Laadpunt-UID",
+          "connector_id": "Connector",
+          "card_identifier": "Nummer op de laadpas"
+        }
+      },
+      "reauth_confirm": {
+        "title": "E-Flux opnieuw verbinden",
+        "description": "De E-Flux-sessie is verlopen. Geef een nieuwe sessie op.",
+        "data": {
+          "session_token": "Nieuwe E-Flux-sessie"
+        }
+      },
+      "reauth": {
+        "title": "E-Flux opnieuw verbinden",
+        "menu_options": {
+          "reauth_login": "Inloggen met E-Flux",
+          "reauth_confirm": "Bestaande E-Flux-sessie gebruiken"
+        }
+      },
+      "reauth_login": {
+        "title": "Opnieuw inloggen",
+        "data": {
+          "username": "E-mailadres",
+          "password": "Wachtwoord"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Inloggen is niet gelukt. Controleer je gegevens of gebruik een bestaande E-Flux-sessie.",
+      "verification_required": "E-Flux vraagt extra verificatie. Gebruik een bestaande E-Flux-sessie.",
+      "cannot_connect": "E-Flux is niet bereikbaar."
+    },
+    "abort": {
+      "already_configured": "Deze laadpaal is al gekoppeld.",
+      "authentication_expired": "De aanmelding is verlopen."
+    }
+  }
+}

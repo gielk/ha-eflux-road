@@ -1,0 +1,10 @@
+{
+  "domain": "eflux_road",
+  "name": "E-Flux by Road",
+  "codeowners": ["@gielk"],
+  "config_flow": true,
+  "documentation": "https://github.com/gielk/ha-eflux-road",
+  "issue_tracker": "https://github.com/gielk/ha-eflux-road/issues",
+  "iot_class": "cloud_polling",
+  "version": "0.1.0"
+}
