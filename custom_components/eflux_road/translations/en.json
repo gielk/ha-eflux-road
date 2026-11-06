@@ -1,0 +1,72 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect E-Flux by Road",
+        "description": "Choose how to connect your E-Flux account. Using an existing browser session token is recommended.",
+        "menu_options": {
+          "session": "Browser session token (Recommended)",
+          "login": "Sign in with email and password"
+        }
+      },
+      "session": {
+        "title": "Connect with E-Flux session token",
+        "description": "Log in to https://dashboard.e-flux.io in your browser, open Developer Tools (F12 > Console), and paste your 'e_flux_jwt' token below. (Quick command: copy(sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt')))",
+        "data": {
+          "session_token": "E-Flux session token (JWT)"
+        }
+      },
+      "login": {
+        "title": "Sign in with E-Flux account",
+        "description": "Log in with your E-Flux credentials.",
+        "data": {
+          "username": "Email address",
+          "password": "Password"
+        }
+      },
+      "charger": {
+        "title": "Charging station and charge card",
+        "description": "Confirm your charging station and card details. Defaults are already filled in for your Alfen charger.",
+        "data": {
+          "evse_id": "EVSE ID",
+          "location_id": "Location ID",
+          "evse_uid": "EVSE UID",
+          "connector_id": "Connector ID",
+          "card_identifier": "Charge card number"
+        }
+      },
+      "reauth": {
+        "title": "Reconnect E-Flux",
+        "description": "Your E-Flux session has expired. Choose how to reconnect.",
+        "menu_options": {
+          "reauth_confirm": "Update session token (Recommended)",
+          "reauth_login": "Sign in with email and password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Update E-Flux session",
+        "description": "Enter a new session token from your browser.",
+        "data": {
+          "session_token": "New E-Flux session token"
+        }
+      },
+      "reauth_login": {
+        "title": "Sign in again",
+        "description": "Sign in with your email address and password.",
+        "data": {
+          "username": "Email address",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Authentication failed. Check your credentials or use the browser session token option.",
+      "verification_required": "E-Flux requires bot/human verification. Please use the browser session token option.",
+      "cannot_connect": "Could not connect to E-Flux. Check your internet connection."
+    },
+    "abort": {
+      "already_configured": "This charging station is already configured.",
+      "authentication_expired": "The authentication flow has expired."
+    }
+  }
+}

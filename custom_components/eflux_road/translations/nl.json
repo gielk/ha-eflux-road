@@ -3,9 +3,17 @@
     "step": {
       "user": {
         "title": "E-Flux by Road koppelen",
+        "description": "Kies hoe je je E-Flux account wilt koppelen. Het sessietoken uit je browser is de aanbevolen methode.",
         "menu_options": {
-          "login": "Inloggen met E-Flux",
-          "session": "Bestaande E-Flux-sessie gebruiken"
+          "session": "Bestaande E-Flux-sessie (Aanbevolen)",
+          "login": "Inloggen met e-mail en wachtwoord"
+        }
+      },
+      "session": {
+        "title": "E-Flux-sessie koppelen",
+        "description": "Log in op https://dashboard.e-flux.io in je browser, open de console (F12 > Console) en plak je 'e_flux_jwt' token. (Tip: typ copy(sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt')) in de console om het direct te kopiëren).",
+        "data": {
+          "session_token": "E-Flux sessietoken (JWT)"
         }
       },
       "login": {
@@ -16,15 +24,9 @@
           "password": "Wachtwoord"
         }
       },
-      "session": {
-        "title": "E-Flux-sessie koppelen",
-        "description": "Gebruik een bestaande sessie wanneer E-Flux om extra verificatie vraagt.",
-        "data": {
-          "session_token": "E-Flux-sessie"
-        }
-      },
       "charger": {
         "title": "Laadpaal en laadpas",
+        "description": "Controleer de gegevens van je laadpaal en pas. De gegevens voor je Alfen laadpaal en laadpas staan al vooringevuld.",
         "data": {
           "evse_id": "Laadpunt-ID",
           "location_id": "Locatie-ID",
@@ -33,22 +35,24 @@
           "card_identifier": "Nummer op de laadpas"
         }
       },
-      "reauth_confirm": {
+      "reauth": {
         "title": "E-Flux opnieuw verbinden",
-        "description": "De E-Flux-sessie is verlopen. Geef een nieuwe sessie op.",
+        "description": "De E-Flux-sessie is verlopen. Kies hoe je opnieuw verbinding wilt maken.",
+        "menu_options": {
+          "reauth_confirm": "Nieuw sessietoken opgeven (Aanbevolen)",
+          "reauth_login": "Opnieuw inloggen met e-mail en wachtwoord"
+        }
+      },
+      "reauth_confirm": {
+        "title": "E-Flux-sessie vernieuwen",
+        "description": "Geef een nieuw sessietoken op vanuit je browser.",
         "data": {
           "session_token": "Nieuwe E-Flux-sessie"
         }
       },
-      "reauth": {
-        "title": "E-Flux opnieuw verbinden",
-        "menu_options": {
-          "reauth_login": "Inloggen met E-Flux",
-          "reauth_confirm": "Bestaande E-Flux-sessie gebruiken"
-        }
-      },
       "reauth_login": {
         "title": "Opnieuw inloggen",
+        "description": "Log in met je e-mailadres en wachtwoord.",
         "data": {
           "username": "E-mailadres",
           "password": "Wachtwoord"
@@ -56,13 +60,13 @@
       }
     },
     "error": {
-      "invalid_auth": "Inloggen is niet gelukt. Controleer je gegevens of gebruik een bestaande E-Flux-sessie.",
-      "verification_required": "E-Flux vraagt extra verificatie. Gebruik een bestaande E-Flux-sessie.",
-      "cannot_connect": "E-Flux is niet bereikbaar."
+      "invalid_auth": "Inloggen is niet gelukt. Controleer je gegevens of gebruik de optie met het sessietoken.",
+      "verification_required": "E-Flux vraagt extra verificatie of bot-controle. Gebruik de optie met het sessietoken.",
+      "cannot_connect": "E-Flux is niet bereikbaar. Controleer je internetverbinding."
     },
     "abort": {
       "already_configured": "Deze laadpaal is al gekoppeld.",
-      "authentication_expired": "De aanmelding is verlopen."
+      "authentication_expired": "De aanmelding is verlopen. Probeer het opnieuw."
     }
   }
 }

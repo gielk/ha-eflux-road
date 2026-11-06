@@ -2,67 +2,71 @@
   "config": {
     "step": {
       "user": {
-        "title": "E-Flux by Road koppelen",
+        "title": "Connect E-Flux by Road",
+        "description": "Choose how to connect your E-Flux account. Using an existing browser session token is recommended.",
         "menu_options": {
-          "login": "Inloggen met E-Flux",
-          "session": "Bestaande E-Flux-sessie gebruiken"
-        }
-      },
-      "login": {
-        "title": "Inloggen met E-Flux",
-        "description": "Log in met je E-Flux-account.",
-        "data": {
-          "username": "E-mailadres",
-          "password": "Wachtwoord"
+          "session": "Browser session token (Recommended)",
+          "login": "Sign in with email and password"
         }
       },
       "session": {
-        "title": "E-Flux-sessie koppelen",
-        "description": "Gebruik een bestaande sessie wanneer E-Flux om extra verificatie vraagt.",
+        "title": "Connect with E-Flux session token",
+        "description": "Log in to https://dashboard.e-flux.io in your browser, open Developer Tools (F12 > Console), and paste your 'e_flux_jwt' token below. (Quick command: copy(sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt')))",
         "data": {
-          "session_token": "E-Flux-sessie"
+          "session_token": "E-Flux session token (JWT)"
+        }
+      },
+      "login": {
+        "title": "Sign in with E-Flux account",
+        "description": "Log in with your E-Flux credentials.",
+        "data": {
+          "username": "Email address",
+          "password": "Password"
         }
       },
       "charger": {
-        "title": "Laadpaal en laadpas",
+        "title": "Charging station and charge card",
+        "description": "Confirm your charging station and card details. Defaults are already filled in for your Alfen charger.",
         "data": {
-          "evse_id": "Laadpunt-ID",
-          "location_id": "Locatie-ID",
-          "evse_uid": "Laadpunt-UID",
-          "connector_id": "Connector",
-          "card_identifier": "Nummer op de laadpas"
-        }
-      },
-      "reauth_confirm": {
-        "title": "E-Flux opnieuw verbinden",
-        "description": "De E-Flux-sessie is verlopen. Geef een nieuwe sessie op.",
-        "data": {
-          "session_token": "Nieuwe E-Flux-sessie"
+          "evse_id": "EVSE ID",
+          "location_id": "Location ID",
+          "evse_uid": "EVSE UID",
+          "connector_id": "Connector ID",
+          "card_identifier": "Charge card number"
         }
       },
       "reauth": {
-        "title": "E-Flux opnieuw verbinden",
+        "title": "Reconnect E-Flux",
+        "description": "Your E-Flux session has expired. Choose how to reconnect.",
         "menu_options": {
-          "reauth_login": "Inloggen met E-Flux",
-          "reauth_confirm": "Bestaande E-Flux-sessie gebruiken"
+          "reauth_confirm": "Update session token (Recommended)",
+          "reauth_login": "Sign in with email and password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Update E-Flux session",
+        "description": "Enter a new session token from your browser.",
+        "data": {
+          "session_token": "New E-Flux session token"
         }
       },
       "reauth_login": {
-        "title": "Opnieuw inloggen",
+        "title": "Sign in again",
+        "description": "Sign in with your email address and password.",
         "data": {
-          "username": "E-mailadres",
-          "password": "Wachtwoord"
+          "username": "Email address",
+          "password": "Password"
         }
       }
     },
     "error": {
-      "invalid_auth": "Inloggen is niet gelukt. Controleer je gegevens of gebruik een bestaande E-Flux-sessie.",
-      "verification_required": "E-Flux vraagt extra verificatie. Gebruik een bestaande E-Flux-sessie.",
-      "cannot_connect": "E-Flux is niet bereikbaar."
+      "invalid_auth": "Authentication failed. Check your credentials or use the browser session token option.",
+      "verification_required": "E-Flux requires bot/human verification. Please use the browser session token option.",
+      "cannot_connect": "Could not connect to E-Flux. Check your internet connection."
     },
     "abort": {
-      "already_configured": "Deze laadpaal is al gekoppeld.",
-      "authentication_expired": "De aanmelding is verlopen."
+      "already_configured": "This charging station is already configured.",
+      "authentication_expired": "The authentication flow has expired."
     }
   }
 }

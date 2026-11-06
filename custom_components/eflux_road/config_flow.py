@@ -31,7 +31,7 @@ class EFluxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(self, user_input=None):
         """Choose how to authenticate."""
         return self.async_show_menu(
-            step_id="user", menu_options=["login", "session"],
+            step_id="user", menu_options=["session", "login"],
         )
 
     async def async_step_login(self, user_input=None):
@@ -66,17 +66,22 @@ class EFluxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Use a session obtained by signing into E-Flux in the browser."""
         errors = {}
         if user_input is not None:
+            raw_token = user_input[CONF_SESSION_TOKEN].strip().strip("\"'")
+            if raw_token.startswith("Bearer "):
+                raw_token = raw_token[7:].strip()
             client = EFluxClient(
-                async_get_clientsession(self.hass), user_input[CONF_SESSION_TOKEN].strip()
+                async_get_clientsession(self.hass), raw_token
             )
             try:
-                await client.validate()
+                user_info = await client.validate()
             except EFluxAuthError:
                 errors["base"] = "invalid_auth"
             except EFluxError:
                 errors["base"] = "cannot_connect"
             else:
                 self._token = client.token
+                if not self._username and isinstance(user_info, dict):
+                    self._username = user_info.get("email", "")
                 return await self.async_step_charger()
         return self.async_show_form(
             step_id="session",
@@ -113,7 +118,7 @@ class EFluxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_reauth(self, entry_data):
         """Start reauthentication."""
         return self.async_show_menu(
-            step_id="reauth", menu_options=["reauth_login", "reauth_confirm"],
+            step_id="reauth", menu_options=["reauth_confirm", "reauth_login"],
         )
 
     async def async_step_reauth_login(self, user_input=None):
@@ -154,8 +159,11 @@ class EFluxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         if user_input is not None:
             entry = self._get_reauth_entry()
+            raw_token = user_input[CONF_SESSION_TOKEN].strip().strip("\"'")
+            if raw_token.startswith("Bearer "):
+                raw_token = raw_token[7:].strip()
             client = EFluxClient(
-                async_get_clientsession(self.hass), user_input[CONF_SESSION_TOKEN].strip()
+                async_get_clientsession(self.hass), raw_token
             )
             try:
                 await client.validate()

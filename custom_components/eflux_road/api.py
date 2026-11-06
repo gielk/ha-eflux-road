@@ -82,8 +82,8 @@ class EFluxClient:
         self.token = token
         return token
 
-    async def validate(self) -> None:
-        await self.request("GET", "/1/auth/whoami")
+    async def validate(self) -> Any:
+        return await self.request("GET", "/1/auth/whoami")
 
     async def refresh(self) -> str:
         data = await self.request("POST", "/1/auth/refresh")
