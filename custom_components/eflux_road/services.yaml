@@ -1,3 +1,6 @@
 start_session:
   name: Start laadsessie
   description: Start een laadsessie op de geconfigureerde E-Flux laadpaal met de gekoppelde laadpas.
+stop_session:
+  name: Stop laadsessie
+  description: Stop de uniek herkende actieve E-Flux sessie op de geconfigureerde laadpaal.

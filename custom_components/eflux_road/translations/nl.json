@@ -11,7 +11,7 @@
       },
       "session": {
         "title": "E-Flux-sessie koppelen",
-        "description": "Log in op https://dashboard.e-flux.io in je browser, open de console (F12 > Console) en plak je 'e_flux_jwt' token. (Tip: typ copy(sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt')) in de console om het direct te kopiëren).",
+        "description": "1. Log in op https://dashboard.e-flux.io in Chrome op een computer.\n\n2. Open in datzelfde tabblad de console met **⌘ + ⌥ + J** op Mac of **Ctrl + Shift + J** op Windows/Linux.\n\n3. Voer in de console uit: `copy(sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'))`\n\n4. Keer terug naar dit scherm en plak het token uit je klembord in het veld hieronder. Deel dit token niet; het geeft toegang tot je account. Zie de README voor uitleg en een methode zonder commando.",
         "data": {
           "session_token": "E-Flux sessietoken (JWT)"
         }
@@ -26,7 +26,7 @@
       },
       "charger": {
         "title": "Laadpaal en laadpas",
-        "description": "Controleer de gegevens van je laadpaal en pas. De gegevens voor je Alfen laadpaal en laadpas staan al vooringevuld.",
+        "description": "Vul de ontbrekende gegevens handmatig in.",
         "data": {
           "evse_id": "Laadpunt-ID",
           "location_id": "Locatie-ID",
@@ -45,7 +45,7 @@
       },
       "reauth_confirm": {
         "title": "E-Flux-sessie vernieuwen",
-        "description": "Geef een nieuw sessietoken op vanuit je browser.",
+        "description": "1. Log in op https://dashboard.e-flux.io in Chrome op een computer.\n\n2. Open in datzelfde tabblad de console met **⌘ + ⌥ + J** op Mac of **Ctrl + Shift + J** op Windows/Linux.\n\n3. Voer in de console uit: `copy(sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'))`\n\n4. Keer terug naar dit scherm en plak het token uit je klembord in het veld hieronder. Deel dit token niet; het geeft toegang tot je account. Zie de README voor uitleg en een methode zonder commando.",
         "data": {
           "session_token": "Nieuwe E-Flux-sessie"
         }
@@ -57,6 +57,14 @@
           "username": "E-mailadres",
           "password": "Wachtwoord"
         }
+      },
+      "resources": {
+        "title": "Kies laadpas en laadpunt",
+        "description": "Selecteer een gevonden laadpas en laadpunt. Handmatig invoeren is beschikbaar als een laadpunt niet is gevonden.",
+        "data": {
+          "card_identifier": "Laadpas",
+          "station": "Laadpunt"
+        }
       }
     },
     "error": {
@@ -65,6 +73,33 @@
       "cannot_connect": "E-Flux is niet bereikbaar. Controleer je internetverbinding."
     },
     "abort": {
+      "already_configured": "Deze laadpaal is al gekoppeld.",
+      "authentication_expired": "De aanmelding is verlopen. Probeer het opnieuw.",
+      "start_pending": "Er loopt nog een start- of stopverzoek. Wacht tot de uitkomst bekend is."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Laadpas en laadpunt wijzigen",
+        "data": {
+          "card_identifier": "Laadpas",
+          "station": "Laadpunt"
+        }
+      },
+      "manual": {
+        "title": "Gegevens handmatig invoeren",
+        "data": {
+          "card_identifier": "Laadpasnummer",
+          "evse_id": "EVSE ID",
+          "evse_uid": "EVSE UID",
+          "location_id": "Location ID",
+          "connector_id": "Connector ID"
+        }
+      }
+    },
+    "abort": {
+      "start_pending": "Er loopt nog een start- of stopverzoek. Wacht tot de uitkomst bekend is.",
       "already_configured": "Deze laadpaal is al gekoppeld.",
       "authentication_expired": "De aanmelding is verlopen. Probeer het opnieuw."
     }

@@ -10,6 +10,7 @@ import time
 from datetime import datetime
 from datetime import timedelta
 from typing import Any
+from urllib.parse import quote
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -24,6 +25,8 @@ from .const import (
 
 TERMINAL = {"COMPLETED", "CANCELLED", "FAILED", "REJECTED", "EXPIRED"}
 ACTIVE = ["ACTIVE", "PENDING", "CONGESTED", "IDLING", "RESERVATION"]
+FAILURE = {"CANCELLED", "FAILED", "REJECTED", "EXPIRED"}
+SUCCESS = {"ACTIVE", "STARTED", "COMPLETED"}
 
 
 def objects(value: Any, depth: int = 0) -> list[dict]:
@@ -60,6 +63,37 @@ def status(item: dict) -> str:
     return str(item.get("status", "")).upper()
 
 
+def unresolved_sessions(items: list[dict]) -> list[dict]:
+    """Filter locally: Road may return completed records despite its filter.
+
+    Unknown/missing statuses remain blocking rather than being treated as safe.
+    """
+    if not all(isinstance(item, dict) for item in items):
+        raise EFluxError("Unexpected session record")
+    return [item for item in items if status(item) not in TERMINAL]
+
+
+def remote_for_connector(item: dict, config: dict) -> bool:
+    """Only match an explicitly identified connector and EVSE."""
+    return (str(item.get("connectorId")) == config[CONF_CONNECTOR_ID]
+            and item.get("evseId") in (config[CONF_EVSE_ID], config[CONF_EVSE_UID])
+            and (not item.get("locationId") or item["locationId"] == config[CONF_LOCATION_ID]))
+
+
+def selected_live_session(remote: list[dict], active: list[dict], config: dict):
+    """Use only a unique remote session at this connector and its linked telemetry."""
+    matched = [item for item in remote if isinstance(item, dict)
+               and status(item) == "ACTIVE" and item.get("id") and remote_for_connector(item, config)]
+    if len(matched) != 1:
+        return None, None
+    remote_item = matched[0]
+    embedded = remote_item.get("activeSession")
+    linked = [item for item in active if item.get("remoteSessionId") == remote_item["id"]]
+    if isinstance(embedded, dict):
+        return remote_item, embedded
+    return remote_item, linked[0] if len(linked) == 1 else None
+
+
 def jwt_expiry(token: str) -> float:
     """Read a session's expiration without exposing its contents."""
     try:
@@ -79,10 +113,12 @@ class EFluxCoordinator(DataUpdateCoordinator):
             name="E-Flux by Road", update_interval=timedelta(seconds=30),
         )
         self.entry = entry
+        self.config = {**entry.data, **entry.options}
         self.client = client
         self._lock = asyncio.Lock()
         self._start_lock = asyncio.Lock()
         self.last_start = "Geen start aangevraagd"
+        self._last_resolution = None
 
     async def ensure_session(self) -> None:
         """Refresh an expiring session and persist the rotated token."""
@@ -107,40 +143,71 @@ class EFluxCoordinator(DataUpdateCoordinator):
                                     payload={"limit": 50, "statuses": ACTIVE}),
                 self.client.request("GET", "/1/remote-sessions/msp/mine"),
                 self.client.request("POST", "/1/map/locations",
-                                    payload={"ids": [self.entry.data[CONF_LOCATION_ID]]}, auth=False),
+                                    payload={"ids": [self.config[CONF_LOCATION_ID]]}, auth=False),
             )
             if not all(isinstance(value, list) for value in (active, remote, locations)):
                 raise EFluxError("Unexpected session or location format")
+            if len(active) >= 50:
+                raise EFluxError("Session overview may be incomplete")
+            active = unresolved_sessions(active)
             location = next((item for item in locations
-                             if item.get("id") == self.entry.data[CONF_LOCATION_ID]), None)
+                             if item.get("id") == self.config[CONF_LOCATION_ID]), None)
             evse = next((item for item in (location or {}).get("evses", [])
-                         if item.get("uid") == self.entry.data[CONF_EVSE_UID]
-                         and item.get("evse_id") == self.entry.data[CONF_EVSE_ID]), None)
+                         if item.get("uid") == self.config[CONF_EVSE_UID]
+                         and item.get("evse_id") == self.config[CONF_EVSE_ID]), None)
             if not evse:
                 raise EFluxError("The configured charging station was not found")
+            try:
+                card_data = await self.client.request("GET", "/1/cards/mine")
+                matched_cards = [item for item in objects(card_data)
+                                 if isinstance(item.get("token"), dict)
+                                 and self.config[CONF_CARD_ID] in (
+                                     item["token"].get("customId"), item["token"].get("visualNumber"),
+                                     item["token"].get("cardNumber"))]
+                card_status = status(matched_cards[0]) if len(matched_cards) == 1 else None
+            except EFluxError:
+                card_status = None
+            if not all(isinstance(item, dict) for item in remote):
+                raise EFluxError("Unexpected remote session record")
             latest = max(remote, key=lambda item: item.get("createdAt") or "", default={})
+            remote_session, live = selected_live_session(remote, active, self.config)
+            pending_stop = self.entry.data.get("pending_stop")
+            stopped = next((item for item in remote if item.get("id") == pending_stop), None)
+            if pending_stop and stopped and status(stopped) in TERMINAL:
+                self.hass.config_entries.async_update_entry(
+                    self.entry, data={k: v for k, v in self.entry.data.items() if k != "pending_stop"})
             pending_since = self.entry.data.get("pending_since")
             if pending_since:
-                if len(active) > 0 or status(latest) in {"ACTIVE", "STARTED", "COMPLETED"}:
-                    self.hass.config_entries.async_update_entry(
-                        self.entry, data={key: value for key, value in self.entry.data.items()
-                                          if key != "pending_since"},
-                    )
-                elif status(latest) in TERMINAL:
+                baseline = self.entry.data.get("pending_known_ids")
+                # A record must be new, uniquely identifiable and for this
+                # connector. A timestamp alone cannot distinguish old requests.
+                candidates = []
+                if isinstance(baseline, list):
+                    for item in remote:
+                        if not isinstance(item, dict) or not item.get("id"):
+                            continue
+                        if str(item["id"]) in baseline:
+                            continue
+                        same_connector = (
+                            str(item.get("connectorId")) == self.config[CONF_CONNECTOR_ID]
+                            and item.get("evseId") in (
+                                self.config[CONF_EVSE_ID], self.config[CONF_EVSE_UID]
+                            )
+                        )
+                        if same_connector:
+                            candidates.append(item)
+                if len(candidates) == 1:
+                    candidate = candidates[0]
                     try:
-                        created = datetime.fromisoformat(latest["createdAt"].replace("Z", "+00:00")).timestamp()
+                        created = datetime.fromisoformat(candidate["createdAt"].replace("Z", "+00:00")).timestamp()
                     except (KeyError, TypeError, ValueError):
                         created = 0
-                    same_connector = (
-                        str(latest.get("connectorId")) == self.entry.data[CONF_CONNECTOR_ID]
-                        and latest.get("evseId") in (
-                            self.entry.data[CONF_EVSE_ID], self.entry.data[CONF_EVSE_UID]
-                        )
-                    )
-                    if same_connector and created >= pending_since - 60:
+                    candidate_status = status(candidate)
+                    if created >= pending_since - 60 and candidate_status in FAILURE | SUCCESS:
+                        self._last_resolution = candidate_status
                         self.hass.config_entries.async_update_entry(
                             self.entry, data={key: value for key, value in self.entry.data.items()
-                                              if key != "pending_since"},
+                                              if key not in {"pending_since", "pending_known_ids"}},
                         )
             return {
                 "connector": status(evse) or "UNKNOWN",
@@ -148,6 +215,15 @@ class EFluxCoordinator(DataUpdateCoordinator):
                 "remote": status(latest) or "UNKNOWN",
                 "remote_reason": latest.get("cancelledReason"),
                 "last_start": self.last_start,
+                "session_energy": (live or {}).get("kwh"),
+                "session_started": (live or {}).get("startedAt"),
+                "charging_state": (live or {}).get("chargingState"),
+                "card": "••••" + self.config[CONF_CARD_ID][-4:],
+                "card_status": card_status,
+                "max_power": evse.get("maxPower"),
+                "location_name": location.get("name"),
+                "location_address": location.get("address"),
+                "location_city": location.get("city"),
             }
         except EFluxAuthError as err:
             raise ConfigEntryAuthFailed from err
@@ -159,13 +235,8 @@ class EFluxCoordinator(DataUpdateCoordinator):
         await self.ensure_session()
         async with self._lock:
             pending_since = self.entry.data.get("pending_since")
-            if pending_since:
-                if time.time() - float(pending_since) > 180:
-                    self.hass.config_entries.async_update_entry(
-                        self.entry, data={k: v for k, v in self.entry.data.items() if k != "pending_since"}
-                    )
-                else:
-                    raise HomeAssistantError("A previous start must be resolved before retrying")
+            if pending_since or self.entry.data.get("pending_stop"):
+                raise HomeAssistantError("A previous start must be resolved before retrying")
             try:
                 cards, active, history, locations = await asyncio.gather(
                     self.client.request("GET", "/1/cards/mine"),
@@ -173,29 +244,23 @@ class EFluxCoordinator(DataUpdateCoordinator):
                                         payload={"limit": 50, "statuses": ACTIVE}),
                     self.client.request("GET", "/1/remote-sessions/msp/mine"),
                     self.client.request("POST", "/1/map/locations",
-                                        payload={"ids": [self.entry.data[CONF_LOCATION_ID]]}, auth=False),
+                                        payload={"ids": [self.config[CONF_LOCATION_ID]]}, auth=False),
                 )
                 if not all(isinstance(value, list) for value in (active, history, locations)):
                     raise EFluxError("Cannot verify session state")
-
-                def is_recent_pending(item: dict) -> bool:
-                    if status(item) in TERMINAL:
-                        return False
-                    try:
-                        created = datetime.fromisoformat(item["createdAt"].replace("Z", "+00:00")).timestamp()
-                        return (time.time() - created) < 300
-                    except (KeyError, TypeError, ValueError):
-                        return True
-
-                if active or any(is_recent_pending(item) for item in history):
+                if len(active) >= 50:
+                    raise EFluxError("Session overview may be incomplete")
+                if not all(isinstance(item, dict) and item.get("id") for item in history):
+                    raise EFluxError("Cannot identify existing start requests")
+                if unresolved_sessions(active) or unresolved_sessions(history):
                     raise EFluxError("A session or start request is already active")
-                card = find_card(cards, self.entry.data[CONF_CARD_ID])
+                card = find_card(cards, self.config[CONF_CARD_ID])
                 location = next((item for item in locations
-                                 if item.get("id") == self.entry.data[CONF_LOCATION_ID]), None)
+                                 if item.get("id") == self.config[CONF_LOCATION_ID]), None)
                 evse = next((item for item in (location or {}).get("evses", [])
-                             if item.get("uid") == self.entry.data[CONF_EVSE_UID]
-                             and item.get("evse_id") == self.entry.data[CONF_EVSE_ID]), None)
-                if not evse or not any(str(c.get("id")) == self.entry.data[CONF_CONNECTOR_ID]
+                             if item.get("uid") == self.config[CONF_EVSE_UID]
+                             and item.get("evse_id") == self.config[CONF_EVSE_ID]), None)
+                if not evse or not any(str(c.get("id")) == self.config[CONF_CONNECTOR_ID]
                                        for c in evse.get("connectors", [])):
                     raise EFluxError("Configured connector not found")
                 if "REMOTE_START_STOP_CAPABLE" not in evse.get("capabilities", []):
@@ -203,13 +268,15 @@ class EFluxCoordinator(DataUpdateCoordinator):
                 if status(evse) not in {"AVAILABLE", "PREPARING", "CHARGING", "OCCUPIED"}:
                     raise EFluxError("Connector is not ready")
                 self.last_start = "Startverzoek verzonden"
+                self._last_resolution = None
                 self.hass.config_entries.async_update_entry(
-                    self.entry, data={**self.entry.data, "pending_since": time.time()},
+                    self.entry, data={**self.entry.data, "pending_since": time.time(),
+                                      "pending_known_ids": [str(item["id"]) for item in history]},
                 )
                 await self.client.request("POST", "/1/remote-sessions/msp", payload={
-                    "connectorId": self.entry.data[CONF_CONNECTOR_ID],
-                    "evseUid": self.entry.data[CONF_EVSE_UID],
-                    "locationId": self.entry.data[CONF_LOCATION_ID],
+                    "connectorId": self.config[CONF_CONNECTOR_ID],
+                    "evseUid": self.config[CONF_EVSE_UID],
+                    "locationId": self.config[CONF_LOCATION_ID],
                     "paymentType": "TOKEN",
                     "tokenId": card["tokenId"],
                 })
@@ -223,6 +290,27 @@ class EFluxCoordinator(DataUpdateCoordinator):
                 raise HomeAssistantError(self.last_start) from err
             finally:
                 self.async_set_updated_data({**(self.data or {}), "last_start": self.last_start})
+
+    async def stop_once(self) -> None:
+        """Stop only one freshly identified active remote session; never retry blindly."""
+        await self.ensure_session()
+        async with self._lock:
+            if self.entry.data.get("pending_stop"):
+                raise HomeAssistantError("A previous stop request has not been resolved")
+            if self.entry.data.get("pending_since") or self._start_lock.locked():
+                raise HomeAssistantError("A start request is still being processed")
+            try:
+                remote = await self.client.request("GET", "/1/remote-sessions/msp/mine")
+                if not isinstance(remote, list):
+                    raise EFluxError("Cannot verify the current remote session")
+                selected, _ = selected_live_session(remote, [], self.config)
+                if not selected or selected.get("stopRequestedAt"):
+                    raise EFluxError("No unique active remote session can be stopped")
+                self.hass.config_entries.async_update_entry(
+                    self.entry, data={**self.entry.data, "pending_stop": str(selected["id"])})
+                await self.client.request("POST", f"/1/remote-sessions/msp/{quote(str(selected['id']), safe='')}/stop")
+            except EFluxError as err:
+                raise HomeAssistantError("Stopverzoek mislukt of uitkomst onbekend; controleer E-Flux") from err
 
     async def start_until_confirmed(self) -> None:
         """Retry only after Road confirms the previous attempt is terminal."""
@@ -245,20 +333,13 @@ class EFluxCoordinator(DataUpdateCoordinator):
                 await self.async_request_refresh()
                 if not self.last_update_success:
                     raise HomeAssistantError("The start result could not be checked safely")
-                if (self.data or {}).get("active", 0) > 0:
-                    self.last_start = "E-Flux meldt een actieve sessie"
-                    if self.entry.data.get("pending_since"):
-                        self.hass.config_entries.async_update_entry(
-                            self.entry, data={key: value for key, value in self.entry.data.items()
-                                              if key != "pending_since"},
-                        )
-                    self.async_set_updated_data({**self.data, "last_start": self.last_start})
-                    return
             if self.entry.data.get("pending_since"):
-                self.hass.config_entries.async_update_entry(
-                    self.entry, data={key: value for key, value in self.entry.data.items()
-                                      if key != "pending_since"},
-                )
+                raise HomeAssistantError("The start outcome is unknown; retry is blocked")
+            if self._last_resolution in SUCCESS:
+                self.last_start = "E-Flux bevestigt het startverzoek"
+                self.async_set_updated_data({**(self.data or {}), "last_start": self.last_start})
+                return
+            if self._last_resolution not in FAILURE:
                 raise HomeAssistantError("The start outcome is unknown; retry is blocked")
             if attempt < 2 and time.monotonic() < deadline:
                 await asyncio.sleep(15)

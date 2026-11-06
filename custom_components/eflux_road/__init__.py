@@ -10,7 +10,7 @@ from .api import EFluxClient
 from .const import CONF_SESSION_TOKEN, DOMAIN
 from .coordinator import EFluxCoordinator
 
-PLATFORMS = [Platform.SENSOR, Platform.BUTTON]
+PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.BUTTON]
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -20,11 +20,23 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         coordinators = hass.data.get(DOMAIN, {})
         if not coordinators:
             raise HomeAssistantError("Geen E-Flux laadpaal geconfigureerd")
-        for coordinator in coordinators.values():
-            await coordinator.start_until_confirmed()
-            await coordinator.async_request_refresh()
+        if len(coordinators) != 1:
+            raise HomeAssistantError("Kies de startknop van de gewenste E-Flux laadpaal")
+        coordinator = next(iter(coordinators.values()))
+        await coordinator.start_until_confirmed()
+        await coordinator.async_request_refresh()
 
     hass.services.async_register(DOMAIN, "start_session", async_handle_start_session)
+
+    async def async_handle_stop_session(call: ServiceCall) -> None:
+        coordinators = hass.data.get(DOMAIN, {})
+        if len(coordinators) != 1:
+            raise HomeAssistantError("Kies de stopknop van de gewenste E-Flux laadpaal")
+        coordinator = next(iter(coordinators.values()))
+        await coordinator.stop_once()
+        await coordinator.async_request_refresh()
+
+    hass.services.async_register(DOMAIN, "stop_session", async_handle_stop_session)
     return True
 
 
@@ -34,6 +46,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = EFluxCoordinator(hass, entry, client)
     await coordinator.async_config_entry_first_refresh()
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+    original_options = dict(entry.options)
+
+    async def options_updated(hass: HomeAssistant, changed_entry: ConfigEntry) -> None:
+        if dict(changed_entry.options) != original_options:
+            await hass.config_entries.async_reload(changed_entry.entry_id)
+
+    entry.async_on_unload(entry.add_update_listener(options_updated))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 

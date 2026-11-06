@@ -5,15 +5,18 @@ Start en volg je E-Flux (Road.io) laadsessies rechtstreeks vanuit Home Assistant
 ## Wat het doet
 
 - **Sessie starten op afstand**: Start laadsessies op je gekoppelde E-Flux laadpaal (zoals een Alfen Eve) met je geconfigureerde laadpas.
-- **Automatische retry bij afwijzing**: Handelt betrouwbaar de situatie af waarbij E-Flux/laadpaalbeheerder de eerste startpoging(en) weigert (`REJECTED_BY_CPO` of HTTP 500) totdat de connector gereed is. Wacht tussen pogingen en stopt zodra de sessie actief is.
+- **Voorzichtige herhaling**: Een nieuwe poging volgt alleen wanneer E-Flux bevestigt dat het vorige verzoek is afgewezen. Een onzekere uitkomst blokkeert nieuwe verzoeken.
 - **Sensoren & Statussen**:
   - `sensor.e_flux_laadpaal_connectorstatus`: Actuele connectorstatus (bijv. `AVAILABLE`, `PREPARING`, `CHARGING`, `OCCUPIED`).
   - `sensor.e_flux_laadpaal_actieve_sessies`: Aantal actieve laadsessies op je account.
   - `sensor.e_flux_laadpaal_laatste_startstatus`: Status van het laatste startverzoek (`STARTING`, `COMPLETED`, `CANCELLED` met foutreden in attributen).
   - `sensor.e_flux_laadpaal_laatste_startverzoek`: Statusmelding van de startflow.
+  - Energie, begintijd en laadstatus van de huidige sessie, wanneer Road deze gegevens aan de gekozen sessie koppelt.
+  - Gemaskeerde laadpas en passtatus, beschikbaarheid volgens E-Flux en maximaal laadvermogen wanneer bekend.
 - **Bediening**:
   - Knop: `button.e_flux_laadpaal_start_laadsessie`
-  - Actie/Service: `eflux_road.start_session`
+  - Knoppen voor stoppen en status verversen.
+  - Acties: `eflux_road.start_session` en `eflux_road.stop_session` (bij één geconfigureerd laadpunt).
 - **Flexibele inlogflow**:
   - Direct inloggen met E-Flux e-mailadres en wachtwoord.
   - Of sessietoken (`e_flux_jwt` uit de browser) als E-Flux extra verificatie of Cloudflare bot-checks vereist.
@@ -44,32 +47,43 @@ Start en volg je E-Flux (Road.io) laadsessies rechtstreeks vanuit Home Assistant
 2. Zoek naar **E-Flux by Road**.
 3. Kies je inlogmethode:
    - **Inloggen met E-Flux**: Vul je e-mailadres en wachtwoord in.
-   - **Bestaande E-Flux-sessie**: Kopieer het JWT-token (`e_flux_jwt`) uit de Developer Tools van je browser op `dashboard.e-flux.io`.
-4. Bevestig de gegevens van je laadpaal en laadpas (deze staan standaard al ingevuld voor je Alfen laadpaal en pas).
+   - **Bestaande E-Flux-sessie**: Kopieer je sessietoken uit je browser en plak het in Home Assistant. Zie [Sessietoken kopiëren](#sessietoken-kopiëren).
+4. Selecteer een gevonden laadpas en laadpunt. Als je laadpunt niet gevonden wordt, kun je de gegevens handmatig invoeren. Via **Configureren** kun je deze keuze later aanpassen.
+
+De sessie-energiesensor toont de energie van de lopende sessie en is geen doorlopende meter voor het Energiedashboard. Niet iedere provider geeft actuele sessiewaarden door. De integratie gebruikt niet-gedocumenteerde onderdelen van het gebruikersdashboard; wijzigingen bij Road kunnen de werking beïnvloeden. Een start of stop met onzekere uitkomst blijft geblokkeerd totdat de uitkomst bevestigd kan worden.
+
+### Sessietoken kopiëren
+
+Deze stappen zijn bedoeld voor **Google Chrome op een computer**. Het commando werkt in de console van Chrome, niet in de adresbalk of in Home Assistant.
+
+1. Open [het E-Flux-dashboard](https://dashboard.e-flux.io/) in Chrome en log in met het account waarmee je de laadpas gebruikt. Laat dit tabblad open.
+2. Open **Console** in datzelfde E-Flux-tabblad:
+   - **macOS:** druk op `⌘ Command` + `⌥ Option` + `J`.
+   - **Windows of Linux:** druk op `Ctrl` + `Shift` + `J`.
+   - Je kunt ook via het Chrome-menu **Meer hulpprogramma's** → **Hulpprogramma's voor ontwikkelaars** openen en daar **Console** kiezen.
+3. Controleer of de sessie een token bevat. Typ of plak de volgende regel achter de `>` in de console en druk op Enter:
+
+   ```javascript
+   Boolean(sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'))
+   ```
+
+   Verschijnt `true`, ga dan verder. Bij `false` is het token op deze plek niet gevonden: controleer of je bent ingelogd en of de console bij het E-Flux-tabblad hoort. Als opnieuw inloggen niet helpt, kan E-Flux de opslagmethode hebben gewijzigd.
+
+4. Kopieer het token naar je klembord met deze regel en druk op Enter:
+
+   ```javascript
+   copy(sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'))
+   ```
+
+   `undefined` als resultaat is hierbij normaal: de waarde staat op je klembord en wordt niet in de console weergegeven.
+5. Ga terug naar Home Assistant en kies in de E-Flux-installatieflow **Bestaande E-Flux-sessie**. Plak het token in het veld **E-Flux sessietoken (JWT)** met `⌘ Command` + `V` op Mac of `Ctrl` + `V` op Windows/Linux en ga verder. Kopieer het token en plak het op hetzelfde apparaat; een klembord wordt niet automatisch tussen apparaten gedeeld.
+
+**Liever zonder commando?** Open in Chrome DevTools het tabblad **Application**. Kijk onder **Session storage** en, als het daar ontbreekt, onder **Local storage** bij de oorsprong `https://dashboard.e-flux.io`. Zoek de sleutel `e_flux_jwt`, kopieer de waarde en plak die in Home Assistant. Als Chrome plakken in de console blokkeert, kun je deze methode gebruiken.
+
+Behandel het sessietoken als een wachtwoord: deel het niet via chat, screenshots of GitHub. Vraagt Home Assistant later om opnieuw te verbinden, log dan opnieuw in bij E-Flux en herhaal deze stappen voor een nieuw token.
 
 ---
 
 ## Automatisering: Automatisch starten bij inpluggen Tesla
 
-Wanneer je de laadkabel in je Tesla steekt, detecteert Home Assistant dit via `binary_sensor.charger`. Met onderstaande automatisering start de laadsessie automatisch:
-
-```yaml
-alias: "Tesla - Automatisch laden starten via E-Flux"
-description: "Start laadsessie zodra de kabel in de Tesla wordt gestoken en de auto thuis staat"
-mode: single
-trigger:
-  - platform: state
-    entity_id: binary_sensor.charger
-    to: "on"
-condition:
-  - condition: state
-    entity_id: binary_sensor.charging
-    state: "off"
-  - condition: numeric_state
-    entity_id: sensor.e_flux_laadpaal_actieve_sessies
-    below: 1
-action:
-  - service: button.press
-    target:
-      entity_id: button.e_flux_laadpaal_start_laadsessie
-```
+Een automatisering moet de daadwerkelijke aansluiting en de juiste auto betrouwbaar herkennen. Tesla-sensoren en de kaartstatus van E-Flux kunnen vertraagd zijn; controleer de beschikbare lokale laadpaalstatus en de bestaande voertuigdetectie voordat je automatisch starten activeert. De kaartstatus `CHARGING` bewijst niet dat er energie wordt geleverd.

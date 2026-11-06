@@ -12,11 +12,30 @@ from homeassistant.helpers.selector import TextSelector, TextSelectorConfig, Tex
 from .api import EFluxAuthError, EFluxClient, EFluxError, EFluxVerificationRequired
 from .const import (
     CONF_CARD_ID, CONF_CONNECTOR_ID, CONF_EVSE_ID, CONF_EVSE_UID, CONF_LOCATION_ID,
-    CONF_SESSION_TOKEN, DEFAULT_CARD_ID, DEFAULT_CONNECTOR_ID, DEFAULT_EVSE_ID,
-    DEFAULT_EVSE_UID, DEFAULT_LOCATION_ID, DOMAIN,
+    CONF_SESSION_TOKEN, DOMAIN,
 )
+from .discovery import cards, location_ids, stations
 
 PASSWORD = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
+MANUAL = "__manual__"
+
+
+async def discover(client):
+    """Discover resources where the account exposes them; allow manual fallback."""
+    try:
+        found_cards = cards(await client.request("GET", "/1/cards/mine"))
+    except EFluxError:
+        found_cards = {}
+    found_stations = []
+    try:
+        controllers = await client.request("POST", "/1/evse-controllers/mine", payload={"limit": 100})
+        ids = location_ids(controllers)
+        if ids:
+            locations = await client.request("POST", "/1/map/locations", payload={"ids": ids}, auth=False)
+            found_stations = stations(locations)
+    except EFluxError:
+        pass
+    return found_cards, found_stations
 
 
 class EFluxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -27,6 +46,9 @@ class EFluxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         self._token: str | None = None
         self._username: str = ""
+        self._cards = None
+        self._stations = []
+        self._card_id = None
 
     async def async_step_user(self, user_input=None):
         """Choose how to authenticate."""
@@ -52,7 +74,7 @@ class EFluxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "cannot_connect"
             else:
                 self._username = user_input[CONF_USERNAME].strip()
-                return await self.async_step_charger()
+                return await self.async_step_resources()
         return self.async_show_form(
             step_id="login",
             data_schema=vol.Schema({
@@ -82,38 +104,73 @@ class EFluxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._token = client.token
                 if not self._username and isinstance(user_info, dict):
                     self._username = user_info.get("email", "")
-                return await self.async_step_charger()
+                return await self.async_step_resources()
         return self.async_show_form(
             step_id="session",
             data_schema=vol.Schema({vol.Required(CONF_SESSION_TOKEN): PASSWORD}),
             errors=errors,
         )
 
+    async def async_step_resources(self, user_input=None):
+        """Offer discovered cards and stations without putting IDs in labels."""
+        if self._token is None:
+            return self.async_abort(reason="authentication_expired")
+        if self._cards is None:
+            self._cards, self._stations = await discover(EFluxClient(async_get_clientsession(self.hass), self._token))
+        manual = "Handmatig invoeren" if self.hass.config.language == "nl" else "Manual entry"
+        card_choices = {**self._cards, MANUAL: manual}
+        station_choices = {str(i): item["label"] for i, item in enumerate(self._stations)}
+        station_choices[MANUAL] = manual
+        if user_input is not None:
+            self._card_id = user_input[CONF_CARD_ID]
+            if user_input["station"] != MANUAL:
+                selected = self._stations[int(user_input["station"])]
+                self._station = {key: selected[key] for key in (CONF_EVSE_ID, CONF_EVSE_UID,
+                                                                 CONF_LOCATION_ID, CONF_CONNECTOR_ID)}
+            else:
+                self._station = None
+            if self._card_id != MANUAL and self._station is not None:
+                return await self._create_charger({**self._station, CONF_CARD_ID: self._card_id})
+            return await self.async_step_charger()
+        return self.async_show_form(step_id="resources", data_schema=vol.Schema({
+            vol.Required(CONF_CARD_ID, default=next(iter(self._cards), MANUAL)): vol.In(card_choices),
+            vol.Required("station", default=next(iter(station_choices))): vol.In(station_choices),
+        }))
+
+    async def _create_charger(self, values):
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            configured = {**entry.data, **entry.options}
+            if configured.get(CONF_EVSE_ID) == values[CONF_EVSE_ID].strip():
+                return self.async_abort(reason="already_configured")
+        await self.async_set_unique_id(values[CONF_EVSE_ID].strip())
+        self._abort_if_unique_id_configured()
+        return self.async_create_entry(title="E-Flux laadpaal", data={
+            **{key: value.strip() for key, value in values.items()},
+            CONF_SESSION_TOKEN: self._token, CONF_USERNAME: self._username,
+        })
+
     async def async_step_charger(self, user_input=None):
         """Choose the charging station and the card."""
         if self._token is None:
             return self.async_abort(reason="authentication_expired")
         if user_input is not None:
-            await self.async_set_unique_id(user_input[CONF_EVSE_ID].strip())
-            self._abort_if_unique_id_configured()
-            return self.async_create_entry(
-                title="E-Flux laadpaal",
-                data={
-                    **{key: value.strip() for key, value in user_input.items()},
-                    CONF_SESSION_TOKEN: self._token,
-                    CONF_USERNAME: self._username,
-                },
-            )
+            values = {**(self._station or {}), **user_input}
+            if self._card_id != MANUAL:
+                values[CONF_CARD_ID] = self._card_id
+            return await self._create_charger(values)
+        fields = {}
+        if self._station is None:
+            fields.update({vol.Required(key): vol.All(str, vol.Strip, vol.Length(min=1)) for key in (
+                CONF_EVSE_ID, CONF_LOCATION_ID, CONF_EVSE_UID, CONF_CONNECTOR_ID)})
+        if self._card_id == MANUAL:
+            fields[vol.Required(CONF_CARD_ID)] = vol.All(str, vol.Strip, vol.Length(min=1))
         return self.async_show_form(
-            step_id="charger",
-            data_schema=vol.Schema({
-                vol.Required(CONF_EVSE_ID, default=DEFAULT_EVSE_ID): str,
-                vol.Required(CONF_LOCATION_ID, default=DEFAULT_LOCATION_ID): str,
-                vol.Required(CONF_EVSE_UID, default=DEFAULT_EVSE_UID): str,
-                vol.Required(CONF_CONNECTOR_ID, default=DEFAULT_CONNECTOR_ID): str,
-                vol.Required(CONF_CARD_ID, default=DEFAULT_CARD_ID): str,
-            }),
+            step_id="charger", data_schema=vol.Schema(fields),
         )
+
+    @staticmethod
+    def async_get_options_flow(config_entry):
+        return EFluxOptionsFlow()
 
     async def async_step_reauth(self, entry_data):
         """Start reauthentication."""
@@ -180,3 +237,72 @@ class EFluxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema({vol.Required(CONF_SESSION_TOKEN): PASSWORD}),
             errors=errors,
         )
+
+
+class EFluxOptionsFlow(config_entries.OptionsFlow):
+    """Change the card and connector without removing the account."""
+
+    def __init__(self):
+        self._cards = None
+        self._stations = []
+        self._selected = {}
+
+    async def async_step_init(self, user_input=None):
+        entry = self.config_entry
+        coordinator = self.hass.data.get(DOMAIN, {}).get(entry.entry_id)
+        if entry.data.get("pending_since") or entry.data.get("pending_stop") or (coordinator and coordinator._start_lock.locked()):
+            return self.async_abort(reason="start_pending")
+        current = {**entry.data, **entry.options}
+        if self._cards is None:
+            client = coordinator.client if coordinator else EFluxClient(
+                async_get_clientsession(self.hass), entry.data[CONF_SESSION_TOKEN])
+            if coordinator:
+                try:
+                    await coordinator.ensure_session()
+                except EFluxError:
+                    return self.async_abort(reason="authentication_expired")
+            self._cards, self._stations = await discover(client)
+        manual = "Handmatig invoeren" if self.hass.config.language == "nl" else "Manual entry"
+        current_card = "Huidige laadpas" if self.hass.config.language == "nl" else "Current card"
+        choices = {**self._cards, MANUAL: manual}
+        if current.get(CONF_CARD_ID) not in choices:
+            choices[current[CONF_CARD_ID]] = current_card
+        stations_choices = {str(i): item["label"] for i, item in enumerate(self._stations)}
+        stations_choices[MANUAL] = ("Handmatig / huidig laadpunt" if self.hass.config.language == "nl"
+                                    else "Manual entry / current station")
+        if user_input is not None:
+            self._selected = {}
+            if user_input[CONF_CARD_ID] != MANUAL:
+                self._selected[CONF_CARD_ID] = user_input[CONF_CARD_ID]
+            if user_input["station"] != MANUAL:
+                station = self._stations[int(user_input["station"])]
+                self._selected.update({key: station[key] for key in (
+                    CONF_EVSE_ID, CONF_EVSE_UID, CONF_LOCATION_ID, CONF_CONNECTOR_ID)})
+            if len(self._selected) == 5:
+                return self._save()
+            return await self.async_step_manual()
+        return self.async_show_form(step_id="init", data_schema=vol.Schema({
+            vol.Required(CONF_CARD_ID, default=current[CONF_CARD_ID]): vol.In(choices),
+            vol.Required("station", default=MANUAL): vol.In(stations_choices),
+        }))
+
+    async def async_step_manual(self, user_input=None):
+        current = {**self.config_entry.data, **self.config_entry.options}
+        if user_input is not None:
+            self._selected.update({key: value.strip() for key, value in user_input.items()})
+            return self._save()
+        fields = {vol.Required(key, default=current[key]): vol.All(str, vol.Strip, vol.Length(min=1))
+                  for key in (CONF_CARD_ID, CONF_EVSE_ID, CONF_EVSE_UID, CONF_LOCATION_ID, CONF_CONNECTOR_ID)
+                  if key not in self._selected}
+        return self.async_show_form(step_id="manual", data_schema=vol.Schema(fields))
+
+    def _save(self):
+        coordinator = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
+        if self.config_entry.data.get("pending_since") or self.config_entry.data.get("pending_stop") or (coordinator and coordinator._start_lock.locked()):
+            return self.async_abort(reason="start_pending")
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            if entry.entry_id != self.config_entry.entry_id:
+                other = {**entry.data, **entry.options}
+                if other.get(CONF_EVSE_ID) == self._selected[CONF_EVSE_ID]:
+                    return self.async_abort(reason="already_configured")
+        return self.async_create_entry(title="", data={**self.config_entry.options, **self._selected})

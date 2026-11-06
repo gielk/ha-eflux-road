@@ -11,7 +11,7 @@
       },
       "session": {
         "title": "Connect with E-Flux session token",
-        "description": "Log in to https://dashboard.e-flux.io in your browser, open Developer Tools (F12 > Console), and paste your 'e_flux_jwt' token below. (Quick command: copy(sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt')))",
+        "description": "1. Sign in to https://dashboard.e-flux.io using Chrome on a computer.\n\n2. In the same tab, open the console with **⌘ + ⌥ + J** on Mac or **Ctrl + Shift + J** on Windows/Linux.\n\n3. Run in the console: `copy(sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'))`\n\n4. Return here and paste the token from your clipboard into the field below. Do not share this token; it grants access to your account. See the README for details and an option without a command.",
         "data": {
           "session_token": "E-Flux session token (JWT)"
         }
@@ -26,7 +26,7 @@
       },
       "charger": {
         "title": "Charging station and charge card",
-        "description": "Confirm your charging station and card details. Defaults are already filled in for your Alfen charger.",
+        "description": "Enter any missing details manually.",
         "data": {
           "evse_id": "EVSE ID",
           "location_id": "Location ID",
@@ -45,7 +45,7 @@
       },
       "reauth_confirm": {
         "title": "Update E-Flux session",
-        "description": "Enter a new session token from your browser.",
+        "description": "1. Sign in to https://dashboard.e-flux.io using Chrome on a computer.\n\n2. In the same tab, open the console with **⌘ + ⌥ + J** on Mac or **Ctrl + Shift + J** on Windows/Linux.\n\n3. Run in the console: `copy(sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'))`\n\n4. Return here and paste the token from your clipboard into the field below. Do not share this token; it grants access to your account. See the README for details and an option without a command.",
         "data": {
           "session_token": "New E-Flux session token"
         }
@@ -57,6 +57,14 @@
           "username": "Email address",
           "password": "Password"
         }
+      },
+      "resources": {
+        "title": "Select card and charging point",
+        "description": "Select a discovered card and charger, or choose manual entry.",
+        "data": {
+          "card_identifier": "Charge card",
+          "station": "Charging point"
+        }
       }
     },
     "error": {
@@ -65,6 +73,33 @@
       "cannot_connect": "Could not connect to E-Flux. Check your internet connection."
     },
     "abort": {
+      "already_configured": "This charging station is already configured.",
+      "authentication_expired": "The authentication flow has expired.",
+      "start_pending": "A start or stop request is unresolved."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Change card and charging point",
+        "data": {
+          "card_identifier": "Charge card",
+          "station": "Charging point"
+        }
+      },
+      "manual": {
+        "title": "Enter details manually",
+        "data": {
+          "card_identifier": "Charge card number",
+          "evse_id": "EVSE ID",
+          "evse_uid": "EVSE UID",
+          "location_id": "Location ID",
+          "connector_id": "Connector ID"
+        }
+      }
+    },
+    "abort": {
+      "start_pending": "A start or stop request is unresolved.",
       "already_configured": "This charging station is already configured.",
       "authentication_expired": "The authentication flow has expired."
     }
