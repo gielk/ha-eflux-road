@@ -70,6 +70,5 @@ class EFluxSensor(CoordinatorEntity, SensorEntity):
                     ("location_name", "location_address", "location_city")}
         if self.entity_description.key == "remote":
             reason = (self.coordinator.data or {}).get("remote_reason")
-            if reason:
-                return {"cancelled_reason": reason}
+            return {"cancelled_reason": reason}
         return None
