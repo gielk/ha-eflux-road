@@ -127,9 +127,9 @@ class EFluxCoordinator(DataUpdateCoordinator):
         expiry = jwt_expiry(self.client.token)
         if not expiry:
             raise EFluxAuthError("Invalid session")
-        if expiry - time.time() < 900:
+        if self.client.refresh_requested or expiry - time.time() < 900:
             async with self._lock:
-                if jwt_expiry(self.client.token) - time.time() < 900:
+                if self.client.refresh_requested or jwt_expiry(self.client.token) - time.time() < 900:
                     new_token = await self.client.refresh()
                     self.hass.config_entries.async_update_entry(
                         self.entry, data={**self.entry.data, CONF_SESSION_TOKEN: new_token},

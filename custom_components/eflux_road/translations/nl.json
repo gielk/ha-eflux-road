@@ -65,17 +65,48 @@
           "card_identifier": "Laadpas",
           "station": "Laadpunt"
         }
+      },
+      "mfa_method": {
+        "title": "Tweestapsverificatie",
+        "description": "Kies een beschikbare verificatiemethode. Je code wordt niet opgeslagen.",
+        "menu_options": {
+          "mfa_totp": "Authenticator-app",
+          "mfa_sms": "Sms-bericht"
+        }
+      },
+      "mfa_totp": {
+        "title": "Code uit authenticator-app",
+        "description": "Vul de zescijferige code uit je authenticator-app in.",
+        "data": {
+          "code": "Verificatiecode"
+        }
+      },
+      "mfa_sms": {
+        "title": "Verificatie per sms",
+        "description": "Vraag een sms aan en vul de zescijferige code in. Lukt het verzenden niet, probeer het dan opnieuw.",
+        "data": {
+          "code": "Verificatiecode"
+        }
+      },
+      "mfa_validate": {
+        "title": "Aanmelding afronden",
+        "description": "Je verificatiecode is geaccepteerd. Probeer de verbinding opnieuw te controleren; je hoeft de code niet opnieuw in te voeren."
       }
     },
     "error": {
       "invalid_auth": "Inloggen is niet gelukt. Controleer je gegevens of gebruik de optie met het sessietoken.",
-      "verification_required": "E-Flux vraagt extra verificatie of bot-controle. Gebruik de optie met het sessietoken.",
-      "cannot_connect": "E-Flux is niet bereikbaar. Controleer je internetverbinding."
+      "verification_required": "E-Flux vraagt browserverificatie of blokkeert deze verbinding. Gebruik de optie met het sessietoken.",
+      "cannot_connect": "E-Flux is niet bereikbaar. Controleer je internetverbinding.",
+      "mfa_invalid_or_expired": "De code is onjuist of de aanmelding is verlopen. Probeer de code opnieuw of begin opnieuw met inloggen.",
+      "mfa_rate_limited": "Te veel pogingen of aanvragen. Wacht even voordat je het opnieuw probeert.",
+      "mfa_code_format": "Vul de zescijferige verificatiecode in."
     },
     "abort": {
       "already_configured": "Deze laadpaal is al gekoppeld.",
       "authentication_expired": "De aanmelding is verlopen. Probeer het opnieuw.",
-      "start_pending": "Er loopt nog een start- of stopverzoek. Wacht tot de uitkomst bekend is."
+      "start_pending": "Er loopt nog een start- of stopverzoek. Wacht tot de uitkomst bekend is.",
+      "verification_required": "E-Flux vraagt browserverificatie of blokkeert deze verbinding. Begin opnieuw en kies de optie met het sessietoken.",
+      "wrong_account": "Dit E-Flux-account is anders dan het ingestelde account. Begin opnieuw met het oorspronkelijke account."
     }
   },
   "options": {

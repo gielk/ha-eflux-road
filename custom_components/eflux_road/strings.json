@@ -65,17 +65,48 @@
           "card_identifier": "Charge card",
           "station": "Charging point"
         }
+      },
+      "mfa_method": {
+        "title": "Two-factor authentication",
+        "description": "Choose an available verification method. Your code is not saved.",
+        "menu_options": {
+          "mfa_totp": "Authenticator app",
+          "mfa_sms": "Text message (SMS)"
+        }
+      },
+      "mfa_totp": {
+        "title": "Authenticator code",
+        "description": "Enter the six-digit code from your authenticator app.",
+        "data": {
+          "code": "Verification code"
+        }
+      },
+      "mfa_sms": {
+        "title": "SMS verification",
+        "description": "Request a text message and enter its six-digit code. If sending fails, submit again to retry.",
+        "data": {
+          "code": "Verification code"
+        }
+      },
+      "mfa_validate": {
+        "title": "Complete sign-in",
+        "description": "Your verification code was accepted. Retry checking the connection; you do not need to enter the code again."
       }
     },
     "error": {
       "invalid_auth": "Authentication failed. Check your credentials or use the browser session token option.",
-      "verification_required": "E-Flux requires bot/human verification. Please use the browser session token option.",
-      "cannot_connect": "Could not connect to E-Flux. Check your internet connection."
+      "verification_required": "E-Flux requires browser verification or blocked this client. Use the browser session token option.",
+      "cannot_connect": "Could not connect to E-Flux. Check your internet connection.",
+      "mfa_invalid_or_expired": "The code is incorrect or the sign-in has expired. Try the code again or restart sign-in.",
+      "mfa_rate_limited": "Too many attempts or requests. Wait before trying again.",
+      "mfa_code_format": "Enter the six-digit verification code."
     },
     "abort": {
       "already_configured": "This charging station is already configured.",
       "authentication_expired": "The authentication flow has expired.",
-      "start_pending": "A start or stop request is unresolved."
+      "start_pending": "A start or stop request is unresolved.",
+      "verification_required": "E-Flux requires browser verification or blocked this client. Start again and choose the browser session token option.",
+      "wrong_account": "This E-Flux account is different from the configured account. Start again with the original account."
     }
   },
   "options": {
