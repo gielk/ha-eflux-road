@@ -11,7 +11,7 @@
       },
       "session": {
         "title": "E-Flux-sessie koppelen",
-        "description": "1. Log in op https://dashboard.e-flux.io in Chrome op een computer.\n\n2. Open in datzelfde tabblad de console met **⌘ + ⌥ + J** op Mac of **Ctrl + Shift + J** op Windows/Linux.\n\n3. Voer uit: `copy(JSON.stringify({token: sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'), device: localStorage.getItem('e_flux_device_token')}))`\n\n4. Keer terug en plak de volledige export. Home Assistant bewaart het gekoppelde paar en vernieuwt dit automatisch. Deel deze export niet; hij geeft toegang tot je account.",
+        "description": "1. Log in op https://dashboard.e-flux.io in Chrome op een computer.\n\n2. Open in datzelfde tabblad de console met **⌘ + ⌥ + J** op Mac of **Ctrl + Shift + J** op Windows/Linux.\n\n3. Voer uit: `copy([sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'), localStorage.getItem('e_flux_device_token')].join('|'))`\n\n4. Keer terug en plak de volledige export. Home Assistant bewaart het gekoppelde paar en vernieuwt dit automatisch. Deel deze export niet; hij geeft toegang tot je account.",
         "data": {
           "session_token": "E-Flux-sessie-export (JWT + apparaat-token)"
         }
@@ -45,7 +45,7 @@
       },
       "reauth_confirm": {
         "title": "E-Flux-sessie vernieuwen",
-        "description": "Log in op https://dashboard.e-flux.io in Chrome. Voer in de console van dat tabblad uit: `copy(JSON.stringify({token: sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'), device: localStorage.getItem('e_flux_device_token')}))`. Plak de volledige export hieronder. Deel hem niet.",
+        "description": "Log in op https://dashboard.e-flux.io in Chrome. Voer in de console van dat tabblad uit: `copy([sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'), localStorage.getItem('e_flux_device_token')].join('|'))`. Plak de volledige export hieronder. Deel hem niet.",
         "data": {
           "session_token": "Nieuwe E-Flux-sessie-export"
         }
@@ -60,7 +60,7 @@
       },
       "reconfigure": {
         "title": "E-Flux-sessie bijwerken",
-        "description": "Log in op https://dashboard.e-flux.io in Chrome. Voer in de console van dat tabblad uit: `copy(JSON.stringify({token: sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'), device: localStorage.getItem('e_flux_device_token')}))`. Plak de volledige export hieronder. Deel hem niet.",
+        "description": "Log in op https://dashboard.e-flux.io in Chrome. Voer in de console van dat tabblad uit: `copy([sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'), localStorage.getItem('e_flux_device_token')].join('|'))`. Plak de volledige export hieronder. Deel hem niet.",
         "data": {
           "session_token": "E-Flux-sessie-export (JWT + apparaat-token)"
         }

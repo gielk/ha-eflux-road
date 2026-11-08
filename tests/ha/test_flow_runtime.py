@@ -1,11 +1,11 @@
 """Test real Home Assistant flow machinery with synthetic Road responses."""
 
-import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.eflux_road.config_flow import session_export
 from custom_components.eflux_road.const import DOMAIN
 
 
@@ -31,6 +31,13 @@ def client():
         yield instance
 
 
+def test_session_export_accepts_the_on_screen_pipe_format_and_json():
+    assert session_export("jwt-value|device-value") == ("jwt-value", "device-value")
+    assert session_export('{"token":"jwt-value","device":"device-value"}') == (
+        "jwt-value", "device-value",
+    )
+
+
 async def test_setup_selects_discovered_card_and_station(hass, client):
     with patch("custom_components.eflux_road.async_setup_entry", return_value=True):
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
@@ -38,7 +45,7 @@ async def test_setup_selects_discovered_card_and_station(hass, client):
         result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "session"})
         assert result["step_id"] == "session"
         result = await hass.config_entries.flow.async_configure(result["flow_id"], {
-            "session_token": json.dumps({"token": "synthetic", "device": "device"}),
+            "session_token": "synthetic|device",
         })
         assert result["step_id"] == "resources"
         result = await hass.config_entries.flow.async_configure(result["flow_id"],
@@ -61,7 +68,7 @@ async def test_reconfigure_replaces_the_paired_session_credentials(hass, client)
     )
     assert result["step_id"] == "reconfigure"
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {
-        "session_token": json.dumps({"token": "synthetic", "device": "device"}),
+        "session_token": "synthetic|device",
     })
     assert result["type"] == "abort"
     assert result["reason"] == "reconfigure_successful"

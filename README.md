@@ -84,10 +84,10 @@ Deze stappen zijn bedoeld voor **Google Chrome op een computer**. Het commando w
 4. Kopieer beide waarden als één beveiligde export naar je klembord met deze regel en druk op Enter:
 
    ```javascript
-   copy(JSON.stringify({
-     token: sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'),
-     device: localStorage.getItem('e_flux_device_token')
-   }))
+   copy([
+     sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'),
+     localStorage.getItem('e_flux_device_token')
+   ].join('|'))
    ```
 
    `undefined` als resultaat is hierbij normaal: de export staat op je klembord en wordt niet in de console weergegeven.

@@ -41,6 +41,14 @@ def session_export(value: str) -> tuple[str, str | None]:
         if device_token is not None and (not isinstance(device_token, str) or not device_token.strip()):
             raise ValueError("Invalid device token")
         return token.strip(), device_token.strip() if isinstance(device_token, str) else None
+    # Config-flow translations use braces for placeholders. The on-screen
+    # instructions therefore copy the two values as `jwt|device` instead of
+    # a JSON object. A JWT cannot contain a pipe, making this unambiguous.
+    if "|" in raw:
+        token, device_token = raw.split("|", 1)
+        if not token.strip() or not device_token.strip():
+            raise ValueError("Invalid session export")
+        return token.strip(), device_token.strip()
     raw = raw.strip("\"'")
     if raw.startswith("Bearer "):
         raw = raw[7:].strip()
