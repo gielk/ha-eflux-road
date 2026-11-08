@@ -36,14 +36,16 @@ class EFluxClient:
     def __init__(self, session: ClientSession, token: str | None = None) -> None:
         self._session = session
         self.token = token
+        self.refresh_requested = False
 
     async def request(
         self, method: str, path: str, *, payload: dict[str, Any] | None = None,
         auth: bool = True,
     ) -> Any:
         headers = {"Accept": "application/json", "Provider": PROVIDER, "X-Source": "dashboard"}
-        if auth and self.token:
-            headers["Authorization"] = f"Bearer {self.token}"
+        request_token = self.token if auth else None
+        if request_token:
+            headers["Authorization"] = f"Bearer {request_token}"
         try:
             async with asyncio.timeout(15):
                 async with self._session.request(
@@ -63,6 +65,12 @@ class EFluxClient:
                         raise EFluxError("Invalid E-Flux response") from err
                     if not isinstance(data, dict) or "data" not in data:
                         raise EFluxError("Unexpected E-Flux response")
+                    # A late response for an old token must not trigger another
+                    # renewal after a concurrent request has already rotated it.
+                    if (request_token and request_token == self.token
+                            and path != "/1/auth/refresh"
+                            and response.headers.get("X-Token-Status", "").lower() == "refresh"):
+                        self.refresh_requested = True
                     return data["data"]
         except (ClientError, TimeoutError) as err:
             raise EFluxError("E-Flux request failed") from err
@@ -91,4 +99,5 @@ class EFluxClient:
         if not isinstance(token, str) or not token:
             raise EFluxAuthError("Session refresh failed")
         self.token = token
+        self.refresh_requested = False
         return token

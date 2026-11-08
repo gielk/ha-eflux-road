@@ -6,5 +6,5 @@
   "documentation": "https://github.com/gielk/ha-eflux-road",
   "issue_tracker": "https://github.com/gielk/ha-eflux-road/issues",
   "iot_class": "cloud_polling",
-  "version": "0.2.2"
+  "version": "0.2.3"
 }

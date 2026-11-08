@@ -17,6 +17,7 @@ api = importlib.import_module("eflux_road.api")
 
 async def main():
     seen = []
+    slow_started, finish_slow = asyncio.Event(), asyncio.Event()
 
     async def route(request):
         seen.append((request.method, request.path, request.headers.get("Authorization")))
@@ -31,6 +32,12 @@ async def main():
             return web.json_response({"data": {"type": "user"}})
         if request.path == "/1/auth/refresh":
             return web.json_response({"data": {"token": "rotated-token"}})
+        if request.path == "/hint":
+            return web.json_response({"data": {}}, headers={"X-Token-Status": "refresh"})
+        if request.path == "/slow-old-hint":
+            slow_started.set()
+            await finish_slow.wait()
+            return web.json_response({"data": {}}, headers={"X-Token-Status": "refresh"})
         if request.path == "/1/remote-sessions/msp":
             return web.json_response({"error": {"message": "private"}}, status=500)
         raise web.HTTPNotFound()
@@ -48,7 +55,20 @@ async def main():
                 client = api.EFluxClient(session)
                 assert await client.login("test", "password") == "login-token"
                 await client.validate()
+                await client.request("GET", "/hint", auth=False)
+                assert not client.refresh_requested
+                await client.request("GET", "/hint")
+                assert client.refresh_requested
                 assert await client.refresh() == "rotated-token"
+                assert not client.refresh_requested
+                client.token = "old-token"
+                old_request = asyncio.create_task(client.request("GET", "/slow-old-hint"))
+                await slow_started.wait()
+                await client.refresh()
+                finish_slow.set()
+                await old_request
+                assert client.token == "rotated-token"
+                assert not client.refresh_requested
                 try:
                     await client.request("POST", "/1/remote-sessions/msp", payload={})
                 except api.EFluxRequestError as err:

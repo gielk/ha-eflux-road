@@ -27,9 +27,9 @@ Start en volg je E-Flux (Road.io) laadsessies rechtstreeks vanuit Home Assistant
   - Knoppen voor stoppen en status verversen.
   - Acties: `eflux_road.start_session` en `eflux_road.stop_session` (bij één geconfigureerd laadpunt).
 - **Flexibele inlogflow**:
-  - Direct inloggen met E-Flux e-mailadres en wachtwoord.
+  - Direct inloggen met E-Flux e-mailadres en wachtwoord, wanneer E-Flux voor dat account geen aanvullende verificatie vereist.
   - Of sessietoken (`e_flux_jwt` uit de browser) als E-Flux extra verificatie of Cloudflare bot-checks vereist.
-  - Automatische sessieverlenging op de achtergrond.
+  - De integratie probeert een geldige sessie op de achtergrond te verlengen, ook wanneer E-Flux hier eerder om vraagt. Opnieuw aanmelden kan alsnog nodig zijn.
 
 ---
 
@@ -55,7 +55,7 @@ Start en volg je E-Flux (Road.io) laadsessies rechtstreeks vanuit Home Assistant
 1. Ga in Home Assistant naar **Instellingen** → **Apparaten en diensten** → **Integratie toevoegen**.
 2. Zoek naar **E-Flux by Road**.
 3. Kies je inlogmethode:
-   - **Inloggen met E-Flux**: Vul je e-mailadres en wachtwoord in.
+   - **Inloggen met E-Flux**: Vul je e-mailadres en wachtwoord in. Als E-Flux om browserverificatie of tweestapsverificatie vraagt, gebruik je de sessietokenoptie.
    - **Bestaande E-Flux-sessie**: Kopieer je sessietoken uit je browser en plak het in Home Assistant. Zie [Sessietoken kopiëren](#sessietoken-kopiëren).
 4. Selecteer een gevonden laadpas en laadpunt. Als je laadpunt niet gevonden wordt, kun je de gegevens handmatig invoeren. Via **Configureren** kun je deze keuze later aanpassen.
 
