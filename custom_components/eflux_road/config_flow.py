@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import voluptuous as vol
 
 from homeassistant import config_entries
@@ -12,12 +14,39 @@ from homeassistant.helpers.selector import TextSelector, TextSelectorConfig, Tex
 from .api import EFluxAuthError, EFluxClient, EFluxError, EFluxVerificationRequired
 from .const import (
     CONF_CARD_ID, CONF_CONNECTOR_ID, CONF_EVSE_ID, CONF_EVSE_UID, CONF_LOCATION_ID,
-    CONF_SESSION_TOKEN, DOMAIN,
+    CONF_DEVICE_TOKEN, CONF_SESSION_TOKEN, DOMAIN,
 )
 from .discovery import cards, location_ids, stations
 
 PASSWORD = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
 MANUAL = "__manual__"
+
+
+def session_export(value: str) -> tuple[str, str | None]:
+    """Accept either a JWT or the masked config-flow browser export.
+
+    The export has only the two values the dashboard itself uses to renew a
+    session. It is never logged and the selector masks it in Home Assistant.
+    """
+    raw = value.strip()
+    try:
+        exported = json.loads(raw)
+    except (TypeError, ValueError):
+        exported = None
+    if isinstance(exported, dict):
+        token = exported.get("token")
+        device_token = exported.get("device", exported.get("deviceToken"))
+        if not isinstance(token, str) or not token.strip():
+            raise ValueError("Missing session token")
+        if device_token is not None and (not isinstance(device_token, str) or not device_token.strip()):
+            raise ValueError("Invalid device token")
+        return token.strip(), device_token.strip() if isinstance(device_token, str) else None
+    raw = raw.strip("\"'")
+    if raw.startswith("Bearer "):
+        raw = raw[7:].strip()
+    if not raw:
+        raise ValueError("Missing session token")
+    return raw, None
 
 
 async def discover(client):
@@ -45,6 +74,7 @@ class EFluxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         self._token: str | None = None
+        self._device_token: str | None = None
         self._username: str = ""
         self._cards = None
         self._stations = []
@@ -73,6 +103,7 @@ class EFluxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except EFluxError:
                 errors["base"] = "cannot_connect"
             else:
+                self._device_token = client.device_token
                 self._username = user_input[CONF_USERNAME].strip()
                 return await self.async_step_resources()
         return self.async_show_form(
@@ -88,20 +119,19 @@ class EFluxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Use a session obtained by signing into E-Flux in the browser."""
         errors = {}
         if user_input is not None:
-            raw_token = user_input[CONF_SESSION_TOKEN].strip().strip("\"'")
-            if raw_token.startswith("Bearer "):
-                raw_token = raw_token[7:].strip()
-            client = EFluxClient(
-                async_get_clientsession(self.hass), raw_token
-            )
             try:
+                raw_token, device_token = session_export(user_input[CONF_SESSION_TOKEN])
+                client = EFluxClient(
+                    async_get_clientsession(self.hass), raw_token, device_token,
+                )
                 user_info = await client.validate()
-            except EFluxAuthError:
+            except (EFluxAuthError, ValueError):
                 errors["base"] = "invalid_auth"
             except EFluxError:
                 errors["base"] = "cannot_connect"
             else:
                 self._token = client.token
+                self._device_token = client.device_token
                 if not self._username and isinstance(user_info, dict):
                     self._username = user_info.get("email", "")
                 return await self.async_step_resources()
@@ -116,7 +146,9 @@ class EFluxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if self._token is None:
             return self.async_abort(reason="authentication_expired")
         if self._cards is None:
-            self._cards, self._stations = await discover(EFluxClient(async_get_clientsession(self.hass), self._token))
+            self._cards, self._stations = await discover(EFluxClient(
+                async_get_clientsession(self.hass), self._token, self._device_token,
+            ))
         manual = "Handmatig invoeren" if self.hass.config.language == "nl" else "Manual entry"
         card_choices = {**self._cards, MANUAL: manual}
         station_choices = {str(i): item["label"] for i, item in enumerate(self._stations)}
@@ -144,10 +176,13 @@ class EFluxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_abort(reason="already_configured")
         await self.async_set_unique_id(values[CONF_EVSE_ID].strip())
         self._abort_if_unique_id_configured()
-        return self.async_create_entry(title="E-Flux laadpaal", data={
+        data = {
             **{key: value.strip() for key, value in values.items()},
             CONF_SESSION_TOKEN: self._token, CONF_USERNAME: self._username,
-        })
+        }
+        if self._device_token:
+            data[CONF_DEVICE_TOKEN] = self._device_token
+        return self.async_create_entry(title="E-Flux laadpaal", data=data)
 
     async def async_step_charger(self, user_input=None):
         """Choose the charging station and the card."""
@@ -199,6 +234,7 @@ class EFluxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_update_reload_and_abort(
                     entry, data_updates={
                         CONF_SESSION_TOKEN: token,
+                        CONF_DEVICE_TOKEN: client.device_token,
                         CONF_USERNAME: user_input[CONF_USERNAME].strip(),
                     }
                 )
@@ -216,24 +252,54 @@ class EFluxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         if user_input is not None:
             entry = self._get_reauth_entry()
-            raw_token = user_input[CONF_SESSION_TOKEN].strip().strip("\"'")
-            if raw_token.startswith("Bearer "):
-                raw_token = raw_token[7:].strip()
-            client = EFluxClient(
-                async_get_clientsession(self.hass), raw_token
-            )
             try:
+                raw_token, device_token = session_export(user_input[CONF_SESSION_TOKEN])
+                client = EFluxClient(
+                    async_get_clientsession(self.hass), raw_token, device_token,
+                )
                 await client.validate()
-            except EFluxAuthError:
+            except (EFluxAuthError, ValueError):
                 errors["base"] = "invalid_auth"
             except EFluxError:
                 errors["base"] = "cannot_connect"
             else:
                 return self.async_update_reload_and_abort(
-                    entry, data_updates={CONF_SESSION_TOKEN: client.token}
+                    entry, data_updates={
+                        CONF_SESSION_TOKEN: client.token,
+                        CONF_DEVICE_TOKEN: client.device_token,
+                    }
                 )
         return self.async_show_form(
             step_id="reauth_confirm",
+            data_schema=vol.Schema({vol.Required(CONF_SESSION_TOKEN): PASSWORD}),
+            errors=errors,
+        )
+
+    async def async_step_reconfigure(self, user_input=None):
+        """Replace the credentials of an existing entry without deleting it."""
+        errors = {}
+        entry = self._get_reconfigure_entry()
+        if user_input is not None:
+            try:
+                raw_token, device_token = session_export(user_input[CONF_SESSION_TOKEN])
+                client = EFluxClient(
+                    async_get_clientsession(self.hass), raw_token, device_token,
+                )
+                await client.validate()
+            except (EFluxAuthError, ValueError):
+                errors["base"] = "invalid_auth"
+            except EFluxError:
+                errors["base"] = "cannot_connect"
+            else:
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data_updates={
+                        CONF_SESSION_TOKEN: client.token,
+                        CONF_DEVICE_TOKEN: client.device_token,
+                    },
+                )
+        return self.async_show_form(
+            step_id="reconfigure",
             data_schema=vol.Schema({vol.Required(CONF_SESSION_TOKEN): PASSWORD}),
             errors=errors,
         )
@@ -255,7 +321,9 @@ class EFluxOptionsFlow(config_entries.OptionsFlow):
         current = {**entry.data, **entry.options}
         if self._cards is None:
             client = coordinator.client if coordinator else EFluxClient(
-                async_get_clientsession(self.hass), entry.data[CONF_SESSION_TOKEN])
+                async_get_clientsession(self.hass), entry.data[CONF_SESSION_TOKEN],
+                entry.data.get(CONF_DEVICE_TOKEN),
+            )
             if coordinator:
                 try:
                     await coordinator.ensure_session()

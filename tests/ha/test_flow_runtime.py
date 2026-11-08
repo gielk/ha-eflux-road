@@ -1,5 +1,6 @@
 """Test real Home Assistant flow machinery with synthetic Road responses."""
 
+import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -13,6 +14,7 @@ def client():
     with patch("custom_components.eflux_road.config_flow.EFluxClient") as cls:
         instance = cls.return_value
         instance.token = "synthetic"
+        instance.device_token = "synthetic-device"
         instance.validate = AsyncMock(return_value={"email": "example@example.invalid"})
 
         async def request(method, path, **kwargs):
@@ -35,13 +37,36 @@ async def test_setup_selects_discovered_card_and_station(hass, client):
         assert result["type"] == "menu"
         result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "session"})
         assert result["step_id"] == "session"
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"session_token": "synthetic"})
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {
+            "session_token": json.dumps({"token": "synthetic", "device": "device"}),
+        })
         assert result["step_id"] == "resources"
         result = await hass.config_entries.flow.async_configure(result["flow_id"],
                                                                   {"card_identifier": "TEST1234", "station": "0"})
         assert result["type"] == "create_entry"
         assert result["data"]["evse_id"] == "evse"
         assert result["data"]["card_identifier"] == "TEST1234"
+        assert result["data"]["device_token"] == "synthetic-device"
+
+
+async def test_reconfigure_replaces_the_paired_session_credentials(hass, client):
+    entry = MockConfigEntry(domain=DOMAIN, data={
+        "session_token": "old", "device_token": "old-device", "evse_id": "evse",
+        "evse_uid": "uid", "location_id": "location", "connector_id": "1",
+        "card_identifier": "TEST1234",
+    })
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "reconfigure", "entry_id": entry.entry_id},
+    )
+    assert result["step_id"] == "reconfigure"
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {
+        "session_token": json.dumps({"token": "synthetic", "device": "device"}),
+    })
+    assert result["type"] == "abort"
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data["session_token"] == "synthetic"
+    assert entry.data["device_token"] == "synthetic-device"
 
 
 async def test_options_keep_existing_entry_and_select_new_resources(hass, client):

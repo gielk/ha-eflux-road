@@ -20,7 +20,13 @@ async def main():
     slow_started, finish_slow = asyncio.Event(), asyncio.Event()
 
     async def route(request):
-        seen.append((request.method, request.path, request.headers.get("Authorization")))
+        seen.append((
+            request.method,
+            request.path,
+            request.headers.get("Authorization"),
+            request.headers.get("X-Device-Id"),
+            request.headers.get("Content-Type"),
+        ))
         if request.path == "/1/auth/login":
             payload = await request.json()
             if payload["email"] == "verification":
@@ -31,7 +37,12 @@ async def main():
         if request.path == "/1/auth/whoami":
             return web.json_response({"data": {"type": "user"}})
         if request.path == "/1/auth/refresh":
-            return web.json_response({"data": {"token": "rotated-token"}})
+            assert request.headers.get("Authorization") == "Bearer login-token"
+            assert request.headers.get("X-Device-Id") == "initial-device"
+            assert request.headers.get("Content-Type") == "application/json"
+            return web.json_response({"data": {
+                "token": "rotated-token", "deviceToken": "rotated-device",
+            }})
         if request.path == "/hint":
             return web.json_response({"data": {}}, headers={"X-Token-Status": "refresh"})
         if request.path == "/slow-old-hint":
@@ -52,22 +63,26 @@ async def main():
     try:
         with patch.object(api, "API_URL", f"http://127.0.0.1:{port}"):
             async with ClientSession() as session:
-                client = api.EFluxClient(session)
+                client = api.EFluxClient(session, device_token="initial-device")
                 assert await client.login("test", "password") == "login-token"
                 await client.validate()
                 await client.request("GET", "/hint", auth=False)
                 assert not client.refresh_requested
                 await client.request("GET", "/hint")
                 assert client.refresh_requested
-                assert await client.refresh() == "rotated-token"
+                assert await client.refresh() == ("rotated-token", "rotated-device")
                 assert not client.refresh_requested
                 client.token = "old-token"
+                client.device_token = "old-device"
                 old_request = asyncio.create_task(client.request("GET", "/slow-old-hint"))
                 await slow_started.wait()
-                await client.refresh()
+                client.token = "new-token"
+                client.device_token = "new-device"
+                client.refresh_requested = False
                 finish_slow.set()
                 await old_request
-                assert client.token == "rotated-token"
+                assert client.token == "new-token"
+                assert client.device_token == "new-device"
                 assert not client.refresh_requested
                 try:
                     await client.request("POST", "/1/remote-sessions/msp", payload={})
@@ -83,8 +98,9 @@ async def main():
                         pass
                     else:
                         raise AssertionError(f"{account} must require verification")
-        assert sum(path == "/1/remote-sessions/msp" for _, path, _ in seen) == 1
-        print("Login, verificatie, sessieverversing en eenmalig 500-verzoek gecontroleerd.")
+        assert sum(path == "/1/remote-sessions/msp" for _, path, *_ in seen) == 1
+        assert any(path == "/1/auth/refresh" for _, path, *_ in seen)
+        print("Login, verificatie, apparaatgebonden sessievernieuwing en eenmalig 500-verzoek gecontroleerd.")
     finally:
         await runner.cleanup()
 

@@ -33,19 +33,35 @@ class EFluxRequestError(EFluxError):
 class EFluxClient:
     """Minimal client with explicit request boundaries."""
 
-    def __init__(self, session: ClientSession, token: str | None = None) -> None:
+    def __init__(
+        self,
+        session: ClientSession,
+        token: str | None = None,
+        device_token: str | None = None,
+    ) -> None:
         self._session = session
         self.token = token
+        # Road's dashboard pairs its bearer session with this rotating device
+        # credential. It is deliberately kept separate from the JWT because
+        # both values rotate together after a successful refresh.
+        self.device_token = device_token
         self.refresh_requested = False
 
     async def request(
         self, method: str, path: str, *, payload: dict[str, Any] | None = None,
-        auth: bool = True,
+        auth: bool = True, json_content_type: bool = False,
     ) -> Any:
         headers = {"Accept": "application/json", "Provider": PROVIDER, "X-Source": "dashboard"}
         request_token = self.token if auth else None
         if request_token:
             headers["Authorization"] = f"Bearer {request_token}"
+        if isinstance(self.device_token, str) and self.device_token:
+            headers["X-Device-Id"] = self.device_token
+        if json_content_type:
+            # The dashboard sends this header for its otherwise empty refresh
+            # request. Keep the wire format compatible without logging either
+            # credential or a response body.
+            headers["Content-Type"] = "application/json"
         try:
             async with asyncio.timeout(15):
                 async with self._session.request(
@@ -65,8 +81,9 @@ class EFluxClient:
                         raise EFluxError("Invalid E-Flux response") from err
                     if not isinstance(data, dict) or "data" not in data:
                         raise EFluxError("Unexpected E-Flux response")
-                    # A late response for an old token must not trigger another
-                    # renewal after a concurrent request has already rotated it.
+                    # A late response for an old token must not make a newer
+                    # session refresh again. Do not react to the refresh
+                    # endpoint itself either.
                     if (request_token and request_token == self.token
                             and path != "/1/auth/refresh"
                             and response.headers.get("X-Token-Status", "").lower() == "refresh"):
@@ -88,16 +105,30 @@ class EFluxClient:
         if not isinstance(token, str) or not token:
             raise EFluxAuthError("No session returned")
         self.token = token
+        device_token = data.get("deviceToken")
+        if isinstance(device_token, str) and device_token:
+            self.device_token = device_token
         return token
 
     async def validate(self) -> Any:
         return await self.request("GET", "/1/auth/whoami")
 
-    async def refresh(self) -> str:
-        data = await self.request("POST", "/1/auth/refresh")
-        token = data.get("token") if isinstance(data, dict) else None
+    async def refresh(self) -> tuple[str, str]:
+        """Rotate the paired browser-session and device credentials."""
+        if not self.token or not isinstance(self.device_token, str) or not self.device_token:
+            raise EFluxAuthError("E-Flux session renewal needs a device credential")
+        data = await self.request(
+            "POST", "/1/auth/refresh", json_content_type=True,
+        )
+        if not isinstance(data, dict):
+            raise EFluxAuthError("Unexpected session renewal response")
+        token = data.get("token")
+        rotated_device = data.get("deviceToken", self.device_token)
         if not isinstance(token, str) or not token:
-            raise EFluxAuthError("Session refresh failed")
+            raise EFluxAuthError("E-Flux did not return a renewed session")
+        if not isinstance(rotated_device, str) or not rotated_device:
+            raise EFluxAuthError("E-Flux did not return a usable device credential")
         self.token = token
+        self.device_token = rotated_device
         self.refresh_requested = False
-        return token
+        return token, rotated_device

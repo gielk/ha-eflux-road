@@ -3,17 +3,17 @@
     "step": {
       "user": {
         "title": "Connect E-Flux by Road",
-        "description": "Choose how to connect your E-Flux account. Using an existing browser session token is recommended.",
+        "description": "Choose how to connect your E-Flux account. A browser session export can renew itself automatically and is recommended.",
         "menu_options": {
-          "session": "Browser session token (Recommended)",
+          "session": "Browser session export (Recommended)",
           "login": "Sign in with email and password"
         }
       },
       "session": {
-        "title": "Connect with E-Flux session token",
-        "description": "1. Sign in to https://dashboard.e-flux.io using Chrome on a computer.\n\n2. In the same tab, open the console with **⌘ + ⌥ + J** on Mac or **Ctrl + Shift + J** on Windows/Linux.\n\n3. Run in the console: `copy(sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'))`\n\n4. Return here and paste the token from your clipboard into the field below. Do not share this token; it grants access to your account. See the README for details and an option without a command.",
+        "title": "Connect with E-Flux session export",
+        "description": "1. Sign in to https://dashboard.e-flux.io using Chrome on a computer.\n\n2. In the same tab, open the console with **⌘ + ⌥ + J** on Mac or **Ctrl + Shift + J** on Windows/Linux.\n\n3. Run: `copy(JSON.stringify({token: sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'), device: localStorage.getItem('e_flux_device_token')}))`\n\n4. Return here and paste the complete export. Home Assistant stores the paired values and renews them automatically. Do not share this export; it grants access to your account.",
         "data": {
-          "session_token": "E-Flux session token (JWT)"
+          "session_token": "E-Flux session export (JWT + device token)"
         }
       },
       "login": {
@@ -37,17 +37,17 @@
       },
       "reauth": {
         "title": "Reconnect E-Flux",
-        "description": "Your E-Flux session has expired. Choose how to reconnect.",
+        "description": "Your E-Flux session could not be renewed. Choose how to reconnect.",
         "menu_options": {
-          "reauth_confirm": "Update session token (Recommended)",
+          "reauth_confirm": "Update session export (Recommended)",
           "reauth_login": "Sign in with email and password"
         }
       },
       "reauth_confirm": {
         "title": "Update E-Flux session",
-        "description": "1. Sign in to https://dashboard.e-flux.io using Chrome on a computer.\n\n2. In the same tab, open the console with **⌘ + ⌥ + J** on Mac or **Ctrl + Shift + J** on Windows/Linux.\n\n3. Run in the console: `copy(sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'))`\n\n4. Return here and paste the token from your clipboard into the field below. Do not share this token; it grants access to your account. See the README for details and an option without a command.",
+        "description": "Sign in to https://dashboard.e-flux.io in Chrome. In that tab's console, run: `copy(JSON.stringify({token: sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'), device: localStorage.getItem('e_flux_device_token')}))`. Paste the complete export below. Do not share it.",
         "data": {
-          "session_token": "New E-Flux session token"
+          "session_token": "New E-Flux session export"
         }
       },
       "reauth_login": {
@@ -56,6 +56,13 @@
         "data": {
           "username": "Email address",
           "password": "Password"
+        }
+      },
+      "reconfigure": {
+        "title": "Update E-Flux session",
+        "description": "Sign in to https://dashboard.e-flux.io in Chrome. In that tab's console, run: `copy(JSON.stringify({token: sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'), device: localStorage.getItem('e_flux_device_token')}))`. Paste the complete export below. Do not share it.",
+        "data": {
+          "session_token": "E-Flux session export (JWT + device token)"
         }
       },
       "resources": {

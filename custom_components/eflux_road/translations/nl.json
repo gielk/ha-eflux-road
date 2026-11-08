@@ -3,17 +3,17 @@
     "step": {
       "user": {
         "title": "E-Flux by Road koppelen",
-        "description": "Kies hoe je je E-Flux account wilt koppelen. Het sessietoken uit je browser is de aanbevolen methode.",
+        "description": "Kies hoe je je E-Flux-account wilt koppelen. Een browser-sessie-export kan zichzelf automatisch vernieuwen en is aanbevolen.",
         "menu_options": {
-          "session": "Bestaande E-Flux-sessie (Aanbevolen)",
+          "session": "Browser-sessie-export (Aanbevolen)",
           "login": "Inloggen met e-mail en wachtwoord"
         }
       },
       "session": {
         "title": "E-Flux-sessie koppelen",
-        "description": "1. Log in op https://dashboard.e-flux.io in Chrome op een computer.\n\n2. Open in datzelfde tabblad de console met **⌘ + ⌥ + J** op Mac of **Ctrl + Shift + J** op Windows/Linux.\n\n3. Voer in de console uit: `copy(sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'))`\n\n4. Keer terug naar dit scherm en plak het token uit je klembord in het veld hieronder. Deel dit token niet; het geeft toegang tot je account. Zie de README voor uitleg en een methode zonder commando.",
+        "description": "1. Log in op https://dashboard.e-flux.io in Chrome op een computer.\n\n2. Open in datzelfde tabblad de console met **⌘ + ⌥ + J** op Mac of **Ctrl + Shift + J** op Windows/Linux.\n\n3. Voer uit: `copy(JSON.stringify({token: sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'), device: localStorage.getItem('e_flux_device_token')}))`\n\n4. Keer terug en plak de volledige export. Home Assistant bewaart het gekoppelde paar en vernieuwt dit automatisch. Deel deze export niet; hij geeft toegang tot je account.",
         "data": {
-          "session_token": "E-Flux sessietoken (JWT)"
+          "session_token": "E-Flux-sessie-export (JWT + apparaat-token)"
         }
       },
       "login": {
@@ -37,17 +37,17 @@
       },
       "reauth": {
         "title": "E-Flux opnieuw verbinden",
-        "description": "De E-Flux-sessie is verlopen. Kies hoe je opnieuw verbinding wilt maken.",
+        "description": "De E-Flux-sessie kon niet worden vernieuwd. Kies hoe je opnieuw verbinding wilt maken.",
         "menu_options": {
-          "reauth_confirm": "Nieuw sessietoken opgeven (Aanbevolen)",
+          "reauth_confirm": "Nieuwe sessie-export opgeven (Aanbevolen)",
           "reauth_login": "Opnieuw inloggen met e-mail en wachtwoord"
         }
       },
       "reauth_confirm": {
         "title": "E-Flux-sessie vernieuwen",
-        "description": "1. Log in op https://dashboard.e-flux.io in Chrome op een computer.\n\n2. Open in datzelfde tabblad de console met **⌘ + ⌥ + J** op Mac of **Ctrl + Shift + J** op Windows/Linux.\n\n3. Voer in de console uit: `copy(sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'))`\n\n4. Keer terug naar dit scherm en plak het token uit je klembord in het veld hieronder. Deel dit token niet; het geeft toegang tot je account. Zie de README voor uitleg en een methode zonder commando.",
+        "description": "Log in op https://dashboard.e-flux.io in Chrome. Voer in de console van dat tabblad uit: `copy(JSON.stringify({token: sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'), device: localStorage.getItem('e_flux_device_token')}))`. Plak de volledige export hieronder. Deel hem niet.",
         "data": {
-          "session_token": "Nieuwe E-Flux-sessie"
+          "session_token": "Nieuwe E-Flux-sessie-export"
         }
       },
       "reauth_login": {
@@ -56,6 +56,13 @@
         "data": {
           "username": "E-mailadres",
           "password": "Wachtwoord"
+        }
+      },
+      "reconfigure": {
+        "title": "E-Flux-sessie bijwerken",
+        "description": "Log in op https://dashboard.e-flux.io in Chrome. Voer in de console van dat tabblad uit: `copy(JSON.stringify({token: sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'), device: localStorage.getItem('e_flux_device_token')}))`. Plak de volledige export hieronder. Deel hem niet.",
+        "data": {
+          "session_token": "E-Flux-sessie-export (JWT + apparaat-token)"
         }
       },
       "resources": {

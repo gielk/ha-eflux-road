@@ -20,7 +20,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .api import EFluxAuthError, EFluxClient, EFluxError, EFluxRequestError
 from .const import (
     CONF_CARD_ID, CONF_CONNECTOR_ID, CONF_EVSE_ID, CONF_EVSE_UID, CONF_LOCATION_ID,
-    CONF_SESSION_TOKEN, DOMAIN,
+    CONF_DEVICE_TOKEN, CONF_SESSION_TOKEN, DOMAIN,
 )
 
 TERMINAL = {"COMPLETED", "CANCELLED", "FAILED", "REJECTED", "EXPIRED"}
@@ -116,24 +116,45 @@ class EFluxCoordinator(DataUpdateCoordinator):
         self.config = {**entry.data, **entry.options}
         self.client = client
         self._lock = asyncio.Lock()
+        self._refresh_lock = asyncio.Lock()
         self._start_lock = asyncio.Lock()
         self.last_start = "Geen start aangevraagd"
         self._last_resolution = None
 
     async def ensure_session(self) -> None:
-        """Refresh an expiring session and persist the rotated token."""
+        """Refresh a paired session before it can affect an automation."""
         if not self.client.token:
             raise EFluxAuthError("Missing session")
         expiry = jwt_expiry(self.client.token)
         if not expiry:
             raise EFluxAuthError("Invalid session")
-        if self.client.refresh_requested or expiry - time.time() < 900:
-            async with self._lock:
-                if self.client.refresh_requested or jwt_expiry(self.client.token) - time.time() < 900:
-                    new_token = await self.client.refresh()
-                    self.hass.config_entries.async_update_entry(
-                        self.entry, data={**self.entry.data, CONF_SESSION_TOKEN: new_token},
-                    )
+        refresh_needed = (
+            getattr(self.client, "refresh_requested", False)
+            or expiry - time.time() < 900
+        )
+        if not refresh_needed:
+            return
+        if not getattr(self.client, "device_token", None):
+            raise EFluxAuthError("E-Flux-sessie moet opnieuw worden gekoppeld")
+        # A polling update and a manual start can arrive together. Exactly one
+        # caller may rotate the pair, and the complete new pair is stored in
+        # the config entry only after Road accepted it.
+        async with self._refresh_lock:
+            current_expiry = jwt_expiry(self.client.token)
+            if not current_expiry:
+                raise EFluxAuthError("Invalid renewed session")
+            if (not getattr(self.client, "refresh_requested", False)
+                    and current_expiry - time.time() >= 900):
+                return
+            token, device_token = await self.client.refresh()
+            self.hass.config_entries.async_update_entry(
+                self.entry,
+                data={
+                    **self.entry.data,
+                    CONF_SESSION_TOKEN: token,
+                    CONF_DEVICE_TOKEN: device_token,
+                },
+            )
 
     async def _async_update_data(self) -> dict:
         try:
@@ -145,6 +166,7 @@ class EFluxCoordinator(DataUpdateCoordinator):
                 self.client.request("POST", "/1/map/locations",
                                     payload={"ids": [self.config[CONF_LOCATION_ID]]}, auth=False),
             )
+            await self.ensure_session()
             if not all(isinstance(value, list) for value in (active, remote, locations)):
                 raise EFluxError("Unexpected session or location format")
             if len(active) >= 50:
@@ -246,6 +268,7 @@ class EFluxCoordinator(DataUpdateCoordinator):
                     self.client.request("POST", "/1/map/locations",
                                         payload={"ids": [self.config[CONF_LOCATION_ID]]}, auth=False),
                 )
+                await self.ensure_session()
                 if not all(isinstance(value, list) for value in (active, history, locations)):
                     raise EFluxError("Cannot verify session state")
                 if len(active) >= 50:
@@ -301,6 +324,7 @@ class EFluxCoordinator(DataUpdateCoordinator):
                 raise HomeAssistantError("A start request is still being processed")
             try:
                 remote = await self.client.request("GET", "/1/remote-sessions/msp/mine")
+                await self.ensure_session()
                 if not isinstance(remote, list):
                     raise EFluxError("Cannot verify the current remote session")
                 selected, _ = selected_live_session(remote, [], self.config)

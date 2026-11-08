@@ -28,8 +28,8 @@ Start en volg je E-Flux (Road.io) laadsessies rechtstreeks vanuit Home Assistant
   - Acties: `eflux_road.start_session` en `eflux_road.stop_session` (bij één geconfigureerd laadpunt).
 - **Flexibele inlogflow**:
   - Direct inloggen met E-Flux e-mailadres en wachtwoord, wanneer E-Flux voor dat account geen aanvullende verificatie vereist.
-  - Of sessietoken (`e_flux_jwt` uit de browser) als E-Flux extra verificatie of Cloudflare bot-checks vereist.
-  - De integratie probeert een geldige sessie op de achtergrond te verlengen, ook wanneer E-Flux hier eerder om vraagt. Opnieuw aanmelden kan alsnog nodig zijn.
+  - Of een browser-sessie-export: de JWT én het bijbehorende apparaat-token. Dit is de aanbevolen route wanneer E-Flux extra verificatie, 2FA of Cloudflare bot-checks gebruikt.
+  - Home Assistant vernieuwt dit paar automatisch als Road daarom vraagt of de JWT bijna verloopt. Beide waarden roteren samen; wachtwoord, 2FA-code en browsercookie worden niet opgeslagen.
 
 ---
 
@@ -56,12 +56,12 @@ Start en volg je E-Flux (Road.io) laadsessies rechtstreeks vanuit Home Assistant
 2. Zoek naar **E-Flux by Road**.
 3. Kies je inlogmethode:
    - **Inloggen met E-Flux**: Vul je e-mailadres en wachtwoord in. Als E-Flux om browserverificatie of tweestapsverificatie vraagt, gebruik je de sessietokenoptie.
-   - **Bestaande E-Flux-sessie**: Kopieer je sessietoken uit je browser en plak het in Home Assistant. Zie [Sessietoken kopiëren](#sessietoken-kopiëren).
+   - **Bestaande E-Flux-sessie**: Kopieer de complete sessie-export uit je browser en plak die in Home Assistant. Zie [Sessie-export kopiëren](#sessie-export-kopiëren).
 4. Selecteer een gevonden laadpas en laadpunt. Als je laadpunt niet gevonden wordt, kun je de gegevens handmatig invoeren. Via **Configureren** kun je deze keuze later aanpassen.
 
 De sessie-energiesensor toont de energie van de lopende sessie en is geen doorlopende meter voor het Energiedashboard. Niet iedere provider geeft actuele sessiewaarden door. De integratie gebruikt niet-gedocumenteerde onderdelen van het gebruikersdashboard; wijzigingen bij Road kunnen de werking beïnvloeden. Een start of stop met onzekere uitkomst blijft geblokkeerd totdat de uitkomst bevestigd kan worden.
 
-### Sessietoken kopiëren
+### Sessie-export kopiëren
 
 Deze stappen zijn bedoeld voor **Google Chrome op een computer**. Het commando werkt in de console van Chrome, niet in de adresbalk of in Home Assistant.
 
@@ -70,26 +70,34 @@ Deze stappen zijn bedoeld voor **Google Chrome op een computer**. Het commando w
    - **macOS:** druk op `⌘ Command` + `⌥ Option` + `J`.
    - **Windows of Linux:** druk op `Ctrl` + `Shift` + `J`.
    - Je kunt ook via het Chrome-menu **Meer hulpprogramma's** → **Hulpprogramma's voor ontwikkelaars** openen en daar **Console** kiezen.
-3. Controleer of de sessie een token bevat. Typ of plak de volgende regel achter de `>` in de console en druk op Enter:
+3. Controleer of zowel de sessie als het apparaat-token aanwezig zijn. Typ of plak de volgende regel achter de `>` in de console en druk op Enter:
 
    ```javascript
-   Boolean(sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'))
+   Boolean(
+     (sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt')) &&
+     localStorage.getItem('e_flux_device_token')
+   )
    ```
 
-   Verschijnt `true`, ga dan verder. Bij `false` is het token op deze plek niet gevonden: controleer of je bent ingelogd en of de console bij het E-Flux-tabblad hoort. Als opnieuw inloggen niet helpt, kan E-Flux de opslagmethode hebben gewijzigd.
+   Verschijnt `true`, ga dan verder. Bij `false` ontbreekt minstens één waarde: controleer of je bent ingelogd en of de console bij het E-Flux-tabblad hoort. Als opnieuw inloggen niet helpt, kan E-Flux de opslagmethode hebben gewijzigd.
 
-4. Kopieer het token naar je klembord met deze regel en druk op Enter:
+4. Kopieer beide waarden als één beveiligde export naar je klembord met deze regel en druk op Enter:
 
    ```javascript
-   copy(sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'))
+   copy(JSON.stringify({
+     token: sessionStorage.getItem('e_flux_jwt') || localStorage.getItem('e_flux_jwt'),
+     device: localStorage.getItem('e_flux_device_token')
+   }))
    ```
 
-   `undefined` als resultaat is hierbij normaal: de waarde staat op je klembord en wordt niet in de console weergegeven.
-5. Ga terug naar Home Assistant en kies in de E-Flux-installatieflow **Bestaande E-Flux-sessie**. Plak het token in het veld **E-Flux sessietoken (JWT)** met `⌘ Command` + `V` op Mac of `Ctrl` + `V` op Windows/Linux en ga verder. Kopieer het token en plak het op hetzelfde apparaat; een klembord wordt niet automatisch tussen apparaten gedeeld.
+   `undefined` als resultaat is hierbij normaal: de export staat op je klembord en wordt niet in de console weergegeven.
+5. Ga terug naar Home Assistant en kies in de E-Flux-installatieflow **Bestaande E-Flux-sessie**. Plak de volledige export in het afgeschermde veld met `⌘ Command` + `V` op Mac of `Ctrl` + `V` op Windows/Linux en ga verder. Kopieer en plak op hetzelfde apparaat; een klembord wordt niet automatisch tussen apparaten gedeeld.
 
-**Liever zonder commando?** Open in Chrome DevTools het tabblad **Application**. Kijk onder **Session storage** en, als het daar ontbreekt, onder **Local storage** bij de oorsprong `https://dashboard.e-flux.io`. Zoek de sleutel `e_flux_jwt`, kopieer de waarde en plak die in Home Assistant. Als Chrome plakken in de console blokkeert, kun je deze methode gebruiken.
+**Bestaande installatie bijwerken:** ga naar **Instellingen** → **Apparaten en diensten** → **E-Flux by Road** → **Opnieuw configureren** en plak daar dezelfde volledige export. De laadpas- en laadpuntkeuze blijven behouden.
 
-Behandel het sessietoken als een wachtwoord: deel het niet via chat, screenshots of GitHub. Vraagt Home Assistant later om opnieuw te verbinden, log dan opnieuw in bij E-Flux en herhaal deze stappen voor een nieuw token.
+**Liever zonder commando?** Open in Chrome DevTools het tabblad **Application**. Kijk onder **Session storage** en, als het daar ontbreekt, onder **Local storage** bij de oorsprong `https://dashboard.e-flux.io`. Noteer daar de sleutels `e_flux_jwt` en `e_flux_device_token`; beide zijn nodig. De consolemethode is veiliger, omdat je dan niet handmatig een JSON-export hoeft te maken.
+
+Behandel de volledige export als een wachtwoord: deel hem niet via chat, screenshots of GitHub. Zolang Road de gekoppelde sessie accepteert, ververst Home Assistant deze zelf. Log je uit, trekt Road het apparaat-token in, of faalt een vernieuwing, dan vraagt Home Assistant om opnieuw te configureren. Tot die tijd blokkeert de integratie een nieuwe start of stop liever dan met onzekere inloggegevens te handelen.
 
 ---
 
