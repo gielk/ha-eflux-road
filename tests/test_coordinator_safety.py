@@ -168,6 +168,83 @@ class SafetyTests(unittest.IsolatedAsyncioTestCase):
             await self.coordinator.start_once()
         self.assertEqual(self.road.starts, 0)
 
+    async def test_completed_linked_session_resolves_stale_remote_active(self):
+        self.road.history[0] = {
+            "id": "remote-old", "status": "ACTIVE", "connectorId": "1", "evseId": "station",
+            "activeSessionId": "finished", "activeSession": {"id": "finished", "status": "COMPLETED"},
+        }
+        data = await self.coordinator._async_update_data()
+        self.assertEqual(data["active"], 0)
+        self.assertEqual(data["remote_connector_raw"], "ACTIVE")
+        self.assertEqual(data["remote_connector"], "COMPLETED")
+        self.assertIsNotNone(datetime.fromisoformat(data["last_successful_update"]).tzinfo)
+        self.assertIsNone(data["session_energy"])
+        await self.start_with_500()
+        self.assertEqual(self.road.starts, 1)
+        # A 500 still has an unknown outcome: a second request must not be sent.
+        await self.start_with_500()
+        self.assertEqual(self.road.starts, 1)
+
+    async def test_diagnostics_ignore_other_connectors_and_preserve_uncertainty(self):
+        self.road.history = [
+            {"id": "a", "status": "ACTIVE", "connectorId": "1", "evseId": "station",
+             "createdAt": "2026-01-01T00:00:00Z", "activeSessionId": "one",
+             "activeSession": {"id": "one", "status": "COMPLETED"}},
+            {"id": "b", "status": "ACTIVE", "connectorId": "2", "evseId": "station",
+             "createdAt": "2026-01-02T00:00:00Z"},
+        ]
+        data = await self.coordinator._async_update_data()
+        self.assertEqual(data["remote_connector"], "COMPLETED")
+        self.assertEqual(data["remote_connector_raw"], "ACTIVE")
+        self.road.active = [{"status": "ACTIVE"}]
+        data = await self.coordinator._async_update_data()
+        self.assertEqual(data["remote_connector"], "ACTIVE")
+
+    async def test_stale_active_is_unblocked_only_with_matching_completed_session(self):
+        for change in (
+            {"activeSessionId": None},
+            {"activeSession": {"id": "different", "status": "COMPLETED"}},
+            {"activeSession": {"id": "finished", "status": "ACTIVE"}},
+            {"activeSession": {"id": "finished"}},
+            {"evseId": "another-station"},
+            {"status": "STARTING"},
+        ):
+            self.road.history[0] = {
+                "id": "remote-old", "status": "ACTIVE", "connectorId": "1", "evseId": "station",
+                "activeSessionId": "finished", "activeSession": {"id": "finished", "status": "COMPLETED"},
+                **change,
+            }
+            with self.assertRaises(c.HomeAssistantError, msg=repr(change)):
+                await self.coordinator.start_once()
+            self.assertEqual(self.road.starts, 0)
+
+    async def test_completed_embedded_session_does_not_override_live_account_session(self):
+        self.road.history[0] = {
+            "id": "remote-old", "status": "ACTIVE", "connectorId": "1", "evseId": "station",
+            "activeSessionId": "finished", "activeSession": {"id": "finished", "status": "COMPLETED"},
+        }
+        self.road.active = [{"status": "ACTIVE"}]
+        with self.assertRaises(c.HomeAssistantError):
+            await self.coordinator.start_once()
+        self.assertEqual(self.road.starts, 0)
+
+    async def test_pending_stop_resolves_only_when_linked_session_is_finished(self):
+        self.entry.data["pending_stop"] = "remote-old"
+        self.road.history[0] = {
+            "id": "remote-old", "status": "ACTIVE", "connectorId": "1", "evseId": "station",
+            "activeSessionId": "finished", "activeSession": {"id": "finished", "status": "COMPLETED"},
+        }
+        self.road.active = [{"status": "ACTIVE"}]
+        await self.coordinator._async_update_data()
+        self.assertIn("pending_stop", self.entry.data)
+        self.road.active = []
+        self.road.history[0]["activeSession"]["id"] = "different"
+        await self.coordinator._async_update_data()
+        self.assertIn("pending_stop", self.entry.data)
+        self.road.history[0]["activeSession"]["id"] = "finished"
+        await self.coordinator._async_update_data()
+        self.assertNotIn("pending_stop", self.entry.data)
+
     async def test_stop_is_sent_only_once_for_the_selected_remote_session(self):
         self.road.history.append({"id": "remote", "status": "ACTIVE", "connectorId": "1",
                                   "evseId": "station", "createdAt": datetime.now(timezone.utc).isoformat()})

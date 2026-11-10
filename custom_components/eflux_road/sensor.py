@@ -17,6 +17,9 @@ SENSORS = (
     SensorEntityDescription(key="connector", name="Connectorstatus", icon="mdi:ev-station"),
     SensorEntityDescription(key="active", name="Actieve sessies", icon="mdi:ev-plug-type2"),
     SensorEntityDescription(key="remote", name="Laatste startstatus", icon="mdi:car-electric"),
+    SensorEntityDescription(key="remote_connector", name="Laatste sessiestatus gekozen laadpunt", icon="mdi:ev-station"),
+    SensorEntityDescription(key="remote_connector_raw", name="Startstatus gekozen laadpunt volgens E-Flux", icon="mdi:cloud-outline"),
+    SensorEntityDescription(key="last_successful_update", name="E-Flux succesvol bijgewerkt", device_class=SensorDeviceClass.TIMESTAMP),
     SensorEntityDescription(key="last_start", name="Laatste startverzoek", icon="mdi:history"),
     SensorEntityDescription(key="session_energy", name="Energie huidige sessie", device_class=SensorDeviceClass.ENERGY,
                             native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR),
@@ -55,7 +58,7 @@ class EFluxSensor(CoordinatorEntity, SensorEntity):
         if self.entity_description.key in {"session_energy", "max_power"}:
             return value if (isinstance(value, (int, float)) and not isinstance(value, bool)
                              and math.isfinite(value) and value >= 0) else None
-        if self.entity_description.key == "session_started":
+        if self.entity_description.key in {"session_started", "last_successful_update"}:
             try:
                 parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
                 return parsed if parsed.tzinfo is not None else None

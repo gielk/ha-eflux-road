@@ -19,6 +19,7 @@ Start en volg je E-Flux (Road.io) laadsessies rechtstreeks vanuit Home Assistant
   - `sensor.e_flux_laadpaal_connectorstatus`: Actuele connectorstatus (bijv. `AVAILABLE`, `PREPARING`, `CHARGING`, `OCCUPIED`).
   - `sensor.e_flux_laadpaal_actieve_sessies`: Aantal actieve laadsessies op je account.
   - `sensor.e_flux_laadpaal_laatste_startstatus`: Status van het laatste startverzoek (`STARTING`, `COMPLETED`, `CANCELLED` met foutreden in attributen).
+  - Laatste sessiestatus en oorspronkelijke startstatus van het gekozen laadpunt, plus het tijdstip van de laatste geslaagde E-Flux-update.
   - `sensor.e_flux_laadpaal_laatste_startverzoek`: Statusmelding van de startflow.
   - Energie, begintijd en laadstatus van de huidige sessie, wanneer Road deze gegevens aan de gekozen sessie koppelt.
   - Gemaskeerde laadpas en passtatus, beschikbaarheid volgens E-Flux en maximaal laadvermogen wanneer bekend.
@@ -104,3 +105,5 @@ Behandel de volledige export als een wachtwoord: deel hem niet via chat, screens
 ## Automatisering: Automatisch starten bij inpluggen Tesla
 
 Een automatisering moet de daadwerkelijke aansluiting en de juiste auto betrouwbaar herkennen. Tesla-sensoren en de kaartstatus van E-Flux kunnen vertraagd zijn; controleer de beschikbare lokale laadpaalstatus en de bestaande voertuigdetectie voordat je automatisch starten activeert. De kaartstatus `CHARGING` bewijst niet dat er energie wordt geleverd.
+
+Een oud startverzoek kan bij Road op `ACTIVE` blijven staan terwijl de bijbehorende sessie is afgerond. De integratie herkent dit alleen als de sessie expliciet aan hetzelfde verzoek en gekozen laadpunt is gekoppeld en als afgerond wordt gemeld. Het aantal actieve sessies blijft een controle voor het hele account; een actieve of onduidelijke sessie blokkeert een nieuwe start. De oorspronkelijke en afgeleide status zijn apart zichtbaar.

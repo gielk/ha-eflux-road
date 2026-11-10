@@ -7,7 +7,7 @@ import base64
 import json
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from datetime import timedelta
 from typing import Any
 from urllib.parse import quote
@@ -80,10 +80,31 @@ def remote_for_connector(item: dict, config: dict) -> bool:
             and (not item.get("locationId") or item["locationId"] == config[CONF_LOCATION_ID]))
 
 
+def remote_has_completed_session(item: dict, config: dict) -> bool:
+    """Recognise a stale ACTIVE request only with its own completed transaction.
+
+    Road can retain ACTIVE on a remote request after the embedded transaction
+    becomes COMPLETED. Require both session IDs and the selected connector;
+    timestamps, zero watts and an empty account overview alone are not proof.
+    """
+    session = item.get("activeSession")
+    session_id = item.get("activeSessionId")
+    return (
+        status(item) == "ACTIVE"
+        and remote_for_connector(item, config)
+        and isinstance(session, dict)
+        and status(session) == "COMPLETED"
+        and isinstance(session_id, str)
+        and bool(session_id)
+        and session.get("id") == session_id
+    )
+
+
 def selected_live_session(remote: list[dict], active: list[dict], config: dict):
     """Use only a unique remote session at this connector and its linked telemetry."""
     matched = [item for item in remote if isinstance(item, dict)
-               and status(item) == "ACTIVE" and item.get("id") and remote_for_connector(item, config)]
+               and status(item) == "ACTIVE" and item.get("id") and remote_for_connector(item, config)
+               and not remote_has_completed_session(item, config)]
     if len(matched) != 1:
         return None, None
     remote_item = matched[0]
@@ -192,10 +213,21 @@ class EFluxCoordinator(DataUpdateCoordinator):
             if not all(isinstance(item, dict) for item in remote):
                 raise EFluxError("Unexpected remote session record")
             latest = max(remote, key=lambda item: item.get("createdAt") or "", default={})
+            selected = [item for item in remote if remote_for_connector(item, self.config)]
+            latest_selected = max(selected, key=lambda item: item.get("createdAt") or "", default={})
+            selected_raw_status = status(latest_selected) or "UNKNOWN"
+            selected_status = (
+                "COMPLETED" if not active and latest_selected
+                and remote_has_completed_session(latest_selected, self.config)
+                else selected_raw_status
+            )
             remote_session, live = selected_live_session(remote, active, self.config)
             pending_stop = self.entry.data.get("pending_stop")
             stopped = next((item for item in remote if item.get("id") == pending_stop), None)
-            if pending_stop and stopped and status(stopped) in TERMINAL:
+            if pending_stop and stopped and (
+                status(stopped) in TERMINAL
+                or (not active and remote_has_completed_session(stopped, self.config))
+            ):
                 self.hass.config_entries.async_update_entry(
                     self.entry, data={k: v for k, v in self.entry.data.items() if k != "pending_stop"})
             pending_since = self.entry.data.get("pending_since")
@@ -235,6 +267,9 @@ class EFluxCoordinator(DataUpdateCoordinator):
                 "connector": status(evse) or "UNKNOWN",
                 "active": len(active),
                 "remote": status(latest) or "UNKNOWN",
+                "remote_connector": selected_status,
+                "remote_connector_raw": selected_raw_status,
+                "last_successful_update": datetime.now(timezone.utc).isoformat(),
                 "remote_reason": latest.get("cancelledReason"),
                 "last_start": self.last_start,
                 "session_energy": (live or {}).get("kwh"),
@@ -275,7 +310,9 @@ class EFluxCoordinator(DataUpdateCoordinator):
                     raise EFluxError("Session overview may be incomplete")
                 if not all(isinstance(item, dict) and item.get("id") for item in history):
                     raise EFluxError("Cannot identify existing start requests")
-                if unresolved_sessions(active) or unresolved_sessions(history):
+                unresolved_history = [item for item in unresolved_sessions(history)
+                                      if not remote_has_completed_session(item, self.config)]
+                if unresolved_sessions(active) or unresolved_history:
                     raise EFluxError("A session or start request is already active")
                 card = find_card(cards, self.config[CONF_CARD_ID])
                 location = next((item for item in locations
