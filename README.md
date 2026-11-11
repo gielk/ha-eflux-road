@@ -14,7 +14,7 @@ Start en volg je E-Flux (Road.io) laadsessies rechtstreeks vanuit Home Assistant
 ## Wat het doet
 
 - **Sessie starten op afstand**: Start laadsessies op je gekoppelde E-Flux laadpaal (zoals een Alfen Eve) met je geconfigureerde laadpas.
-- **Voorzichtige herhaling**: Een nieuwe poging volgt alleen wanneer E-Flux bevestigt dat het vorige verzoek is afgewezen. Een onzekere uitkomst blokkeert nieuwe verzoeken.
+- **Voorzichtige herhaling**: Een nieuwe poging volgt alleen wanneer E-Flux bevestigt dat het vorige verzoek is afgewezen. Een onzekere uitkomst blokkeert nieuwe verzoeken tot E-Flux de uitkomst toont. Verschijnt er binnen twee minuten geen nieuw startverzoek en is er geen actieve sessie, dan vervalt de blokkade. Een directe weigering (HTTP 4xx) zonder nieuw startverzoek blokkeert niet.
 - **Sensoren & Statussen**:
   - `sensor.e_flux_laadpaal_connectorstatus`: Actuele connectorstatus (bijv. `AVAILABLE`, `PREPARING`, `CHARGING`, `OCCUPIED`).
   - `sensor.e_flux_laadpaal_actieve_sessies`: Aantal actieve laadsessies op je account.
@@ -107,3 +107,5 @@ Behandel de volledige export als een wachtwoord: deel hem niet via chat, screens
 Een automatisering moet de daadwerkelijke aansluiting en de juiste auto betrouwbaar herkennen. Tesla-sensoren en de kaartstatus van E-Flux kunnen vertraagd zijn; controleer de beschikbare lokale laadpaalstatus en de bestaande voertuigdetectie voordat je automatisch starten activeert. De kaartstatus `CHARGING` bewijst niet dat er energie wordt geleverd.
 
 Een oud startverzoek kan bij Road op `ACTIVE` blijven staan terwijl de bijbehorende sessie is afgerond. De integratie herkent dit alleen als de sessie expliciet aan hetzelfde verzoek en gekozen laadpunt is gekoppeld en als afgerond wordt gemeld. Het aantal actieve sessies blijft een controle voor het hele account; een actieve of onduidelijke sessie blokkeert een nieuwe start. De oorspronkelijke en afgeleide status zijn apart zichtbaar.
+
+Road weigert een nieuwe start (HTTP 412) zolang zo'n oud verzoek op `ACTIVE` staat. Dit komt vooral voor na een sessie zonder geladen energie. De integratie sluit het afgeronde verzoek daarom eerst af met een stopverzoek en start daarna. Road beantwoordt dat stopverzoek met een fout, maar zet het verzoek wel op `ERROR`; zonder lopende sessie telt die status als afgerond.
